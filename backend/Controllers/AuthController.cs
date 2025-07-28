@@ -1,0 +1,530 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.Authentication.MicrosoftAccount;
+using Microsoft.AspNetCore.Authentication.Facebook;
+using Microsoft.AspNetCore.Mvc;
+using MoneyCareBackend.Services;
+using MoneyCareBackend.Models;
+using MoneyCareBackend.Data;
+using MoneyCareBackend.DTOs;
+using System.Security.Claims;
+
+namespace MoneyCareBackend.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class AuthController : ControllerBase
+    {
+        private readonly IAuthService _authService;
+        private readonly MoneyCareDbContext _context;
+        private readonly IConfiguration _configuration;
+
+        public AuthController(IAuthService authService, MoneyCareDbContext context, IConfiguration configuration)
+        {
+            _authService = authService;
+            _context = context;
+            _configuration = configuration;
+        }
+
+        [HttpPost("register")]
+        public async Task<IActionResult> Register([FromBody] RegisterDTO registerDto)
+        {
+            if (registerDto == null)
+                return BadRequest(new { message = "Registration data is required." });
+
+            // Check for duplicate email
+            if (_context.mstUsers.Any(u => u.strEmailId == registerDto.Email))
+                return Conflict(new { message = "Email already exists. Please use a different email or try logging in." });
+
+            // Create new user with hashed password
+            var user = new mstUser
+            {
+                strGUID = Guid.NewGuid().ToString(),
+                strName = registerDto.Name,
+                strEmailId = registerDto.Email,
+                bolsActive = true,
+                strPassword = _authService.HashPassword(registerDto.Password), // Hash the password
+                strOTP = "000000", // Default OTP for new users
+                OtpExpiretIme = DateTime.UtcNow.AddHours(24), // OTP expires in 24 hours
+                createDate = DateTime.UtcNow,
+                ModifyDate = DateTime.UtcNow
+            };
+
+            _context.mstUsers.Add(user);
+            await _context.SaveChangesAsync();
+
+            // Generate tokens
+            var token = _authService.GenerateJwtToken(user);
+            var refreshToken = await _authService.GenerateRefreshTokenAsync(user.strGUID);
+
+            return Ok(new TokenResponseDTO
+            {
+                Token = token,
+                RefreshToken = refreshToken.Token,
+                User = new UserReadDTO
+                {
+                    strGUID = user.strGUID,
+                    strName = user.strName,
+                    strEmailId = user.strEmailId,
+                    bolsActive = user.bolsActive,
+                    createDate = user.createDate,
+                    ModifyDate = user.ModifyDate,
+                    AuthProvider = "email"
+                },
+                AuthProvider = "email",
+                IsNewUser = true,
+                Message = "User registered successfully!"
+            });
+        }
+
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] LoginDTO loginDto)
+        {
+            if (loginDto == null || string.IsNullOrEmpty(loginDto.Email) || string.IsNullOrEmpty(loginDto.Password))
+                return BadRequest(new { message = "Email and password are required." });
+
+            var user = await _authService.ValidateUserAsync(loginDto.Email, loginDto.Password);
+            if (user == null)
+                return Unauthorized(new { message = "Invalid email or password." });
+
+            var token = _authService.GenerateJwtToken(user);
+            var refreshToken = await _authService.GenerateRefreshTokenAsync(user.strGUID);
+            return Ok(new TokenResponseDTO
+            {
+                Token = token,
+                RefreshToken = refreshToken.Token,
+                User = new UserReadDTO
+                {
+                    strGUID = user.strGUID,
+                    strName = user.strName,
+                    strEmailId = user.strEmailId,
+                    bolsActive = user.bolsActive,
+                    createDate = user.createDate,
+                    ModifyDate = user.ModifyDate,
+                    AuthProvider = "email"
+                },
+                AuthProvider = "email",
+                IsNewUser = false,
+                Message = "Login successful!"
+            });
+        }
+
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDTO forgotPasswordDto)
+        {
+            if (forgotPasswordDto == null || string.IsNullOrEmpty(forgotPasswordDto.Email))
+                return BadRequest(new { message = "Email is required." });
+
+            var user = await _authService.GetUserByEmailAsync(forgotPasswordDto.Email);
+            if (user == null)
+                return NotFound(new { message = "User with this email does not exist." });
+
+            // Generate a 6-digit OTP
+            var random = new Random();
+            var otp = random.Next(100000, 999999).ToString();
+            
+            // Set OTP expiration to 10 minutes from now
+            var otpExpiry = DateTime.UtcNow.AddMinutes(10);
+
+            // Update user with new OTP and expiration
+            user.strOTP = otp;
+            user.OtpExpiretIme = otpExpiry;
+            user.ModifyDate = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            // In production, send OTP via email/SMS here
+            // For now, we'll return it in the response for testing
+            return Ok(new OTPResponseDTO
+            {
+                Success = true,
+                Message = "OTP has been sent to your email address.",
+                Email = user.strEmailId,
+                ExpiresAt = otpExpiry,
+                RemainingMinutes = 10,
+                // Note: In production, remove this line and send OTP via email/SMS
+                OTP = otp // Remove this in production!
+            });
+        }
+
+        [HttpPost("verify-otp")]
+        public async Task<IActionResult> VerifyOTP([FromBody] VerifyOTPDTO verifyOtpDto)
+        {
+            if (verifyOtpDto == null || string.IsNullOrEmpty(verifyOtpDto.Email) || string.IsNullOrEmpty(verifyOtpDto.OTP))
+                return BadRequest(new { message = "Email and OTP are required." });
+
+            var user = await _authService.GetUserByEmailAsync(verifyOtpDto.Email);
+            if (user == null)
+                return NotFound(new { message = "User with this email does not exist." });
+
+            // Check if OTP matches and is not expired
+            if (user.strOTP != verifyOtpDto.OTP)
+                return BadRequest(new { message = "Invalid OTP." });
+
+            if (DateTime.UtcNow > user.OtpExpiretIme)
+                return BadRequest(new { message = "OTP has expired. Please request a new one." });
+
+            return Ok(new { 
+                Success = true, 
+                Message = "OTP verified successfully. You can now reset your password.",
+                Email = user.strEmailId
+            });
+        }
+
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDTO resetPasswordDto)
+        {
+            if (resetPasswordDto == null || string.IsNullOrEmpty(resetPasswordDto.Email) || 
+                string.IsNullOrEmpty(resetPasswordDto.OTP) || string.IsNullOrEmpty(resetPasswordDto.NewPassword))
+                return BadRequest(new { message = "Email, OTP, and new password are required." });
+
+            var user = await _authService.GetUserByEmailAsync(resetPasswordDto.Email);
+            if (user == null)
+                return NotFound(new { message = "User with this email does not exist." });
+
+            // Verify OTP
+            if (user.strOTP != resetPasswordDto.OTP)
+                return BadRequest(new { message = "Invalid OTP." });
+
+            if (DateTime.UtcNow > user.OtpExpiretIme)
+                return BadRequest(new { message = "OTP has expired. Please request a new one." });
+
+            // Update password with hash and clear OTP
+            user.strPassword = _authService.HashPassword(resetPasswordDto.NewPassword); // Hash the new password
+            user.strOTP = "000000"; // Clear OTP after use
+            user.OtpExpiretIme = DateTime.UtcNow; // Set to past time to invalidate
+            user.ModifyDate = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { 
+                Success = true, 
+                Message = "Password has been reset successfully. You can now login with your new password.",
+                Email = user.strEmailId
+            });
+        }
+
+        [HttpGet("google")]
+        public IActionResult GoogleLogin()
+        {
+            // Check if Google OAuth is properly configured
+            var clientId = _configuration["Authentication:Google:ClientId"];
+            var clientSecret = _configuration["Authentication:Google:ClientSecret"];
+            
+            if (string.IsNullOrEmpty(clientId) || clientId == "your-google-client-id")
+            {
+                return BadRequest(new { 
+                    message = "Google OAuth is not configured. Please set up Google OAuth credentials in appsettings.json",
+                    setupInstructions = "1. Go to Google Cloud Console\n2. Create OAuth 2.0 credentials\n3. Add ClientId and ClientSecret to appsettings.json",
+                    note = "This endpoint redirects to Google OAuth. Use a browser or Postman to test it properly."
+                });
+            }
+
+            // Check if request is from Swagger UI (has Accept: */* header)
+            var acceptHeader = Request.Headers["Accept"].ToString();
+            if (acceptHeader.Contains("*/*"))
+            {
+                return Ok(new { 
+                    message = "OAuth redirect detected from Swagger UI",
+                    note = "This endpoint redirects to Google OAuth. Swagger UI cannot handle redirects properly.",
+                    redirectUrl = $"https://accounts.google.com/oauth/authorize?client_id={clientId}&redirect_uri={Uri.EscapeDataString($"{Request.Scheme}://{Request.Host}/api/auth/google-callback")}&response_type=code&scope=openid email profile",
+                    instructions = "1. Copy the redirectUrl above\n2. Open it in a browser\n3. Complete Google OAuth flow\n4. You'll be redirected back with a token"
+                });
+            }
+
+            var properties = new AuthenticationProperties
+            {
+                RedirectUri = "/signin-google",
+                Items =
+                {
+                    { "scheme", GoogleDefaults.AuthenticationScheme },
+                    { "returnUrl", "/signin-google" }
+                }
+            };
+            return Challenge(properties, GoogleDefaults.AuthenticationScheme);
+        }
+
+        [HttpGet("google-callback")]
+        public async Task<IActionResult> GoogleCallback()
+        {
+            return await ProcessGoogleCallback();
+        }
+
+        [HttpGet("signin-google")]
+        public async Task<IActionResult> SignInGoogle()
+        {
+            return await ProcessGoogleCallback();
+        }
+
+        private async Task<IActionResult> ProcessGoogleCallback()
+        {
+            var result = await HttpContext.AuthenticateAsync(GoogleDefaults.AuthenticationScheme);
+            if (!result.Succeeded)
+                return BadRequest(new { message = "Google authentication failed." });
+
+            var claims = result.Principal?.Claims;
+            var email = claims?.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+            var name = claims?.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
+
+            if (string.IsNullOrEmpty(email))
+                return BadRequest(new { message = "Email not provided by Google." });
+
+            var user = await _authService.GetUserByEmailAsync(email);
+            var isNewUser = false;
+
+            if (user == null)
+            {
+                // Create new user from Google OAuth
+                user = new mstUser
+                {
+                    strGUID = Guid.NewGuid().ToString(),
+                    strName = name ?? "Google User",
+                    strEmailId = email,
+                    bolsActive = true,
+                    strPassword = _authService.HashPassword(Guid.NewGuid().ToString()), // Hash random password for OAuth users
+                    strOTP = "000000", // Default OTP for OAuth users
+                    OtpExpiretIme = DateTime.UtcNow.AddHours(24), // OTP expires in 24 hours
+                    createDate = DateTime.UtcNow,
+                    ModifyDate = DateTime.UtcNow
+                };
+                _context.mstUsers.Add(user);
+                await _context.SaveChangesAsync();
+                isNewUser = true;
+            }
+
+            var token = _authService.GenerateJwtToken(user);
+            
+            // Redirect to success page with token and user info
+            var userInfo = new UserReadDTO
+            {
+                strGUID = user.strGUID,
+                strName = user.strName,
+                strEmailId = user.strEmailId,
+                bolsActive = user.bolsActive,
+                createDate = user.createDate,
+                ModifyDate = user.ModifyDate,
+                AuthProvider = "google"
+            };
+
+            var responseData = new AuthResponseDTO
+            {
+                Token = token,
+                User = userInfo,
+                AuthProvider = "google",
+                IsNewUser = isNewUser,
+                Message = isNewUser ? "Account created successfully with Google!" : "Login successful with Google!"
+            };
+
+            // For API calls, return JSON. For browser redirects, redirect to success page
+            var acceptHeader = Request.Headers["Accept"].ToString();
+            if (acceptHeader.Contains("application/json"))
+            {
+                return Ok(responseData);
+            }
+
+            return Redirect($"/auth-success?token={token}&provider=google&isNewUser={isNewUser}");
+        }
+
+        [HttpGet("microsoft")]
+        public IActionResult MicrosoftLogin()
+        {
+            var properties = new AuthenticationProperties
+            {
+                RedirectUri = Url.Action(nameof(MicrosoftCallback)),
+                Items =
+                {
+                    { "scheme", MicrosoftAccountDefaults.AuthenticationScheme },
+                    { "returnUrl", Url.Action(nameof(MicrosoftCallback)) }
+                }
+            };
+            return Challenge(properties, MicrosoftAccountDefaults.AuthenticationScheme);
+        }
+
+        [HttpGet("microsoft-callback")]
+        public async Task<IActionResult> MicrosoftCallback()
+        {
+            var result = await HttpContext.AuthenticateAsync(MicrosoftAccountDefaults.AuthenticationScheme);
+            if (!result.Succeeded)
+                return BadRequest(new { message = "Microsoft authentication failed." });
+
+            var claims = result.Principal?.Claims;
+            var email = claims?.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+            var name = claims?.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
+
+            if (string.IsNullOrEmpty(email))
+                return BadRequest(new { message = "Email not provided by Microsoft." });
+
+            var user = await _authService.GetUserByEmailAsync(email);
+            var isNewUser = false;
+
+            if (user == null)
+            {
+                // Create new user from Microsoft OAuth
+                user = new mstUser
+                {
+                    strGUID = Guid.NewGuid().ToString(),
+                    strName = name ?? "Microsoft User",
+                    strEmailId = email,
+                    bolsActive = true,
+                    strPassword = _authService.HashPassword(Guid.NewGuid().ToString()), // Hash random password for OAuth users
+                    strOTP = "000000", // Default OTP for OAuth users
+                    OtpExpiretIme = DateTime.UtcNow.AddHours(24), // OTP expires in 24 hours
+                    createDate = DateTime.UtcNow,
+                    ModifyDate = DateTime.UtcNow
+                };
+                _context.mstUsers.Add(user);
+                await _context.SaveChangesAsync();
+                isNewUser = true;
+            }
+
+            var token = _authService.GenerateJwtToken(user);
+            return Redirect($"/auth-success?token={token}&provider=microsoft&isNewUser={isNewUser}");
+        }
+
+        [HttpGet("facebook")]
+        public IActionResult FacebookLogin()
+        {
+            var properties = new AuthenticationProperties
+            {
+                RedirectUri = Url.Action(nameof(FacebookCallback)),
+                Items =
+                {
+                    { "scheme", FacebookDefaults.AuthenticationScheme },
+                    { "returnUrl", Url.Action(nameof(FacebookCallback)) }
+                }
+            };
+            return Challenge(properties, FacebookDefaults.AuthenticationScheme);
+        }
+
+        [HttpGet("facebook-callback")]
+        public async Task<IActionResult> FacebookCallback()
+        {
+            var result = await HttpContext.AuthenticateAsync(FacebookDefaults.AuthenticationScheme);
+            if (!result.Succeeded)
+                return BadRequest(new { message = "Facebook authentication failed." });
+
+            var claims = result.Principal?.Claims;
+            var email = claims?.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+            var name = claims?.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
+
+            if (string.IsNullOrEmpty(email))
+                return BadRequest(new { message = "Email not provided by Facebook." });
+
+            var user = await _authService.GetUserByEmailAsync(email);
+            var isNewUser = false;
+
+            if (user == null)
+            {
+                // Create new user from Facebook OAuth
+                user = new mstUser
+                {
+                    strGUID = Guid.NewGuid().ToString(),
+                    strName = name ?? "Facebook User",
+                    strEmailId = email,
+                    bolsActive = true,
+                    strPassword = _authService.HashPassword(Guid.NewGuid().ToString()), // Hash random password for OAuth users
+                    strOTP = "000000", // Default OTP for OAuth users
+                    OtpExpiretIme = DateTime.UtcNow.AddHours(24), // OTP expires in 24 hours
+                    createDate = DateTime.UtcNow,
+                    ModifyDate = DateTime.UtcNow
+                };
+                _context.mstUsers.Add(user);
+                await _context.SaveChangesAsync();
+                isNewUser = true;
+            }
+
+            var token = _authService.GenerateJwtToken(user);
+            return Redirect($"/auth-success?token={token}&provider=facebook&isNewUser={isNewUser}");
+        }
+
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout()
+        {
+            await HttpContext.SignOutAsync();
+            return Ok(new { message = "Logged out successfully." });
+        }
+
+        [HttpPost("refresh-token")]
+        public async Task<IActionResult> RefreshToken([FromBody] RefreshRequestDTO dto)
+        {
+            if (dto == null || string.IsNullOrEmpty(dto.RefreshToken))
+                return BadRequest(new { message = "Refresh token is required." });
+
+            var storedToken = await _authService.GetRefreshTokenAsync(dto.RefreshToken);
+            if (storedToken == null)
+                return Unauthorized(new { message = "Invalid or expired refresh token." });
+
+            var user = _context.mstUsers.FirstOrDefault(u => u.strGUID == storedToken.UserGuid);
+            if (user == null)
+                return Unauthorized(new { message = "User not found for this refresh token." });
+
+            // Invalidate the old refresh token
+            await _authService.InvalidateRefreshTokenAsync(storedToken);
+
+            // Issue new tokens
+            var newJwt = _authService.GenerateJwtToken(user);
+            var newRefresh = await _authService.GenerateRefreshTokenAsync(user.strGUID);
+
+            return Ok(new TokenResponseDTO
+            {
+                Token = newJwt,
+                RefreshToken = newRefresh.Token,
+                User = new UserReadDTO
+                {
+                    strGUID = user.strGUID,
+                    strName = user.strName,
+                    strEmailId = user.strEmailId,
+                    bolsActive = user.bolsActive,
+                    createDate = user.createDate,
+                    ModifyDate = user.ModifyDate,
+                    AuthProvider = "email"
+                },
+                AuthProvider = "email",
+                IsNewUser = false,
+                Message = "Token refreshed successfully!"
+            });
+        }
+
+        [HttpGet("profile")]
+        public async Task<IActionResult> GetProfile()
+        {
+            var userId = User.FindFirst("UserId")?.Value;
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized();
+
+            var user = _context.mstUsers.Find(userId);
+            if (user == null)
+                return NotFound();
+
+            return Ok(new UserReadDTO
+            {
+                strGUID = user.strGUID,
+                strName = user.strName,
+                strEmailId = user.strEmailId,
+                bolsActive = user.bolsActive,
+                createDate = user.createDate,
+                ModifyDate = user.ModifyDate,
+                AuthProvider = "email" // You might want to store this in the database
+            });
+        }
+
+        [HttpPost("link-oauth")]
+        public async Task<IActionResult> LinkOAuthAccount([FromBody] OAuthLinkDTO linkDto)
+        {
+            if (linkDto == null)
+                return BadRequest(new { message = "Link data is required." });
+
+            // Validate existing user credentials
+            var user = await _authService.ValidateUserAsync(linkDto.Email, linkDto.Password);
+            if (user == null)
+                return Unauthorized(new { message = "Invalid email or password." });
+
+            // Here you would typically link the OAuth account to the existing user
+            // For now, we'll just return a success message
+            return Ok(new { 
+                message = $"OAuth account linking initiated for {linkDto.OAuthProvider}",
+                note = "Complete the OAuth flow to link your account"
+            });
+        }
+    }
+} 

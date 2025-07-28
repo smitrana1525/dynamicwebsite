@@ -1,0 +1,6 @@
+@MoneyCareBackend_HostAddress = http://localhost:5122
+
+GET {{MoneyCareBackend_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
