@@ -15,8 +15,6 @@ This backend provides a comprehensive authentication system supporting both trad
 
 ### **OAuth 2.0 Authentication**
 - ✅ Google OAuth
-- ✅ Microsoft OAuth
-- ✅ Facebook OAuth
 - ✅ Automatic user creation for OAuth users
 - ✅ Account linking capabilities
 
@@ -181,8 +179,6 @@ Content-Type: application/json
 #### **7. OAuth Endpoints**
 ```http
 GET /api/auth/google          # Google OAuth login
-GET /api/auth/microsoft       # Microsoft OAuth login
-GET /api/auth/facebook        # Facebook OAuth login
 ```
 
 ### **Protected Endpoints** (Require JWT Token)
@@ -223,7 +219,7 @@ DELETE /api/user/{id}         # Delete user
 
 **Example with JWT Token:**
 ```bash
-curl -X GET "http://localhost:5122/api/user" \
+curl -X GET "https://localhost:7222/api/user" \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 ```
 
@@ -243,22 +239,11 @@ dotnet ef database update
 3. Enable Google+ API
 4. Go to Credentials → Create Credentials → OAuth 2.0 Client ID
 5. Add authorized redirect URIs:
-   - `http://localhost:5122/api/auth/google-callback`
-   - `http://localhost:5122/signin-google`
+   - `https://localhost:7222/api/auth/google-callback`
+   - `https://localhost:7222/signin-google`
 6. Copy Client ID and Client Secret
 
-#### **Microsoft OAuth**
-1. Go to [Azure Portal](https://portal.azure.com/)
-2. Register a new application
-3. Add redirect URI: `http://localhost:5122/api/auth/microsoft-callback`
-4. Copy Application (client) ID and create a client secret
 
-#### **Facebook OAuth**
-1. Go to [Facebook Developers](https://developers.facebook.com/)
-2. Create a new app
-3. Add Facebook Login product
-4. Add OAuth redirect URI: `http://localhost:5122/api/auth/facebook-callback`
-5. Copy App ID and App Secret
 
 ### **3. Update Configuration**
 Edit `appsettings.json`:
@@ -274,14 +259,6 @@ Edit `appsettings.json`:
     "Google": {
       "ClientId": "your-google-client-id",
       "ClientSecret": "your-google-client-secret"
-    },
-    "Microsoft": {
-      "ClientId": "your-microsoft-client-id",
-      "ClientSecret": "your-microsoft-client-secret"
-    },
-    "Facebook": {
-      "AppId": "your-facebook-app-id",
-      "AppSecret": "your-facebook-app-secret"
     }
   }
 }
@@ -293,7 +270,7 @@ Edit `appsettings.json`:
 
 #### **Step 1: Register a new user**
 ```bash
-curl -X POST "http://localhost:5122/api/auth/register" \
+curl -X POST "https://localhost:7222/api/auth/register" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Test User",
@@ -322,18 +299,18 @@ TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 REFRESH_TOKEN="base64-encoded-refresh-token"
 
 # Get user profile
-curl -X GET "http://localhost:5122/api/auth/profile" \
+curl -X GET "https://localhost:7222/api/auth/profile" \
   -H "Authorization: Bearer $TOKEN"
 
 # Get all users
-curl -X GET "http://localhost:5122/api/user" \
+curl -X GET "https://localhost:7222/api/user" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 #### **Step 3: Refresh Token When JWT Expires**
 ```bash
 # When JWT expires, use refresh token to get new tokens
-curl -X POST "http://localhost:5122/api/auth/refresh-token" \
+curl -X POST "https://localhost:7222/api/auth/refresh-token" \
   -H "Content-Type: application/json" \
   -d '{
     "refreshToken": "'$REFRESH_TOKEN'"

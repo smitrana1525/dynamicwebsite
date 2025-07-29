@@ -1,7 +1,5 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Google;
-using Microsoft.AspNetCore.Authentication.MicrosoftAccount;
-using Microsoft.AspNetCore.Authentication.Facebook;
 using Microsoft.AspNetCore.Mvc;
 using MoneyCareBackend.Services;
 using MoneyCareBackend.Models;
@@ -89,6 +87,16 @@ namespace MoneyCareBackend.Controllers
 
             var token = _authService.GenerateJwtToken(user);
             var refreshToken = await _authService.GenerateRefreshTokenAsync(user.strGUID);
+
+            // Set cookie for JWT token (local dev: Secure=false, SameSite=Lax)
+            Response.Cookies.Append("moneycareath", token, new CookieOptions
+            {
+                HttpOnly = false, // Set to true for more security
+                Secure = true, // Use Secure for HTTPS only
+                SameSite = SameSiteMode.None, // Required for cross-origin cookies with credentials
+                Expires = DateTime.UtcNow.AddHours(24)
+            });
+
             return Ok(new TokenResponseDTO
             {
                 Token = token,
@@ -204,7 +212,7 @@ namespace MoneyCareBackend.Controllers
             });
         }
 
-        [HttpGet("google")]
+                [HttpGet("google")]
         public IActionResult GoogleLogin()
         {
             // Check if Google OAuth is properly configured
@@ -220,28 +228,41 @@ namespace MoneyCareBackend.Controllers
                 });
             }
 
-            // Check if request is from Swagger UI (has Accept: */* header)
+            // Check if request is from Swagger UI or API testing tools
             var acceptHeader = Request.Headers["Accept"].ToString();
-            if (acceptHeader.Contains("*/*"))
+            var userAgent = Request.Headers["User-Agent"].ToString();
+            
+            // If it's a browser request or from frontend, proceed with OAuth
+            if (string.IsNullOrEmpty(acceptHeader) || 
+                acceptHeader.Contains("text/html") || 
+                acceptHeader.Contains("application/json") ||
+                userAgent.Contains("Mozilla") ||
+                userAgent.Contains("Chrome") ||
+                userAgent.Contains("Safari") ||
+                userAgent.Contains("Firefox"))
             {
-                return Ok(new { 
-                    message = "OAuth redirect detected from Swagger UI",
-                    note = "This endpoint redirects to Google OAuth. Swagger UI cannot handle redirects properly.",
-                    redirectUrl = $"https://accounts.google.com/oauth/authorize?client_id={clientId}&redirect_uri={Uri.EscapeDataString($"{Request.Scheme}://{Request.Host}/api/auth/google-callback")}&response_type=code&scope=openid email profile",
-                    instructions = "1. Copy the redirectUrl above\n2. Open it in a browser\n3. Complete Google OAuth flow\n4. You'll be redirected back with a token"
-                });
+                var properties = new AuthenticationProperties
+                {
+                    RedirectUri = "/api/auth/google-callback",
+                    Items =
+                    {
+                        { "scheme", GoogleDefaults.AuthenticationScheme },
+                        { "returnUrl", "/api/auth/google-callback" }
+                    },
+                    // Add correlation cookie settings
+                    IsPersistent = false,
+                    ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(5)
+                };
+                return Challenge(properties, GoogleDefaults.AuthenticationScheme);
             }
 
-            var properties = new AuthenticationProperties
-            {
-                RedirectUri = "/signin-google",
-                Items =
-                {
-                    { "scheme", GoogleDefaults.AuthenticationScheme },
-                    { "returnUrl", "/signin-google" }
-                }
-            };
-            return Challenge(properties, GoogleDefaults.AuthenticationScheme);
+            // For Swagger UI or other API testing tools, return the redirect URL
+            return Ok(new { 
+                message = "OAuth redirect detected from API testing tool",
+                note = "This endpoint redirects to Google OAuth. Use a browser to test the complete flow.",
+                redirectUrl = $"https://accounts.google.com/oauth/authorize?client_id={clientId}&redirect_uri={Uri.EscapeDataString($"http://localhost:5122/api/auth/google-callback")}&response_type=code&scope=openid email profile",
+                instructions = "1. Copy the redirectUrl above\n2. Open it in a browser\n3. Complete Google OAuth flow\n4. You'll be redirected back with a token"
+            });
         }
 
         [HttpGet("google-callback")]
@@ -258,190 +279,119 @@ namespace MoneyCareBackend.Controllers
 
         private async Task<IActionResult> ProcessGoogleCallback()
         {
-            var result = await HttpContext.AuthenticateAsync(GoogleDefaults.AuthenticationScheme);
-            if (!result.Succeeded)
-                return BadRequest(new { message = "Google authentication failed." });
-
-            var claims = result.Principal?.Claims;
-            var email = claims?.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
-            var name = claims?.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
-
-            if (string.IsNullOrEmpty(email))
-                return BadRequest(new { message = "Email not provided by Google." });
-
-            var user = await _authService.GetUserByEmailAsync(email);
-            var isNewUser = false;
-
-            if (user == null)
+            try
             {
-                // Create new user from Google OAuth
-                user = new mstUser
+                // Check for OAuth errors first
+                var error = Request.Query["error"].ToString();
+                var errorDescription = Request.Query["error_description"].ToString();
+                
+                if (!string.IsNullOrEmpty(error))
                 {
-                    strGUID = Guid.NewGuid().ToString(),
-                    strName = name ?? "Google User",
-                    strEmailId = email,
-                    bolsActive = true,
-                    strPassword = _authService.HashPassword(Guid.NewGuid().ToString()), // Hash random password for OAuth users
-                    strOTP = "000000", // Default OTP for OAuth users
-                    OtpExpiretIme = DateTime.UtcNow.AddHours(24), // OTP expires in 24 hours
-                    createDate = DateTime.UtcNow,
-                    ModifyDate = DateTime.UtcNow
-                };
-                _context.mstUsers.Add(user);
-                await _context.SaveChangesAsync();
-                isNewUser = true;
-            }
-
-            var token = _authService.GenerateJwtToken(user);
-            
-            // Redirect to success page with token and user info
-            var userInfo = new UserReadDTO
-            {
-                strGUID = user.strGUID,
-                strName = user.strName,
-                strEmailId = user.strEmailId,
-                bolsActive = user.bolsActive,
-                createDate = user.createDate,
-                ModifyDate = user.ModifyDate,
-                AuthProvider = "google"
-            };
-
-            var responseData = new AuthResponseDTO
-            {
-                Token = token,
-                User = userInfo,
-                AuthProvider = "google",
-                IsNewUser = isNewUser,
-                Message = isNewUser ? "Account created successfully with Google!" : "Login successful with Google!"
-            };
-
-            // For API calls, return JSON. For browser redirects, redirect to success page
-            var acceptHeader = Request.Headers["Accept"].ToString();
-            if (acceptHeader.Contains("application/json"))
-            {
-                return Ok(responseData);
-            }
-
-            return Redirect($"/auth-success?token={token}&provider=google&isNewUser={isNewUser}");
-        }
-
-        [HttpGet("microsoft")]
-        public IActionResult MicrosoftLogin()
-        {
-            var properties = new AuthenticationProperties
-            {
-                RedirectUri = Url.Action(nameof(MicrosoftCallback)),
-                Items =
-                {
-                    { "scheme", MicrosoftAccountDefaults.AuthenticationScheme },
-                    { "returnUrl", Url.Action(nameof(MicrosoftCallback)) }
+                    return BadRequest(new { 
+                        message = $"Google authentication failed: {error}",
+                        errorDescription = errorDescription
+                    });
                 }
-            };
-            return Challenge(properties, MicrosoftAccountDefaults.AuthenticationScheme);
-        }
 
-        [HttpGet("microsoft-callback")]
-        public async Task<IActionResult> MicrosoftCallback()
-        {
-            var result = await HttpContext.AuthenticateAsync(MicrosoftAccountDefaults.AuthenticationScheme);
-            if (!result.Succeeded)
-                return BadRequest(new { message = "Microsoft authentication failed." });
-
-            var claims = result.Principal?.Claims;
-            var email = claims?.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
-            var name = claims?.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
-
-            if (string.IsNullOrEmpty(email))
-                return BadRequest(new { message = "Email not provided by Microsoft." });
-
-            var user = await _authService.GetUserByEmailAsync(email);
-            var isNewUser = false;
-
-            if (user == null)
-            {
-                // Create new user from Microsoft OAuth
-                user = new mstUser
+                // Try to authenticate
+                var result = await HttpContext.AuthenticateAsync(GoogleDefaults.AuthenticationScheme);
+                if (!result.Succeeded)
                 {
-                    strGUID = Guid.NewGuid().ToString(),
-                    strName = name ?? "Microsoft User",
-                    strEmailId = email,
-                    bolsActive = true,
-                    strPassword = _authService.HashPassword(Guid.NewGuid().ToString()), // Hash random password for OAuth users
-                    strOTP = "000000", // Default OTP for OAuth users
-                    OtpExpiretIme = DateTime.UtcNow.AddHours(24), // OTP expires in 24 hours
-                    createDate = DateTime.UtcNow,
-                    ModifyDate = DateTime.UtcNow
-                };
-                _context.mstUsers.Add(user);
-                await _context.SaveChangesAsync();
-                isNewUser = true;
-            }
-
-            var token = _authService.GenerateJwtToken(user);
-            return Redirect($"/auth-success?token={token}&provider=microsoft&isNewUser={isNewUser}");
-        }
-
-        [HttpGet("facebook")]
-        public IActionResult FacebookLogin()
-        {
-            var properties = new AuthenticationProperties
-            {
-                RedirectUri = Url.Action(nameof(FacebookCallback)),
-                Items =
-                {
-                    { "scheme", FacebookDefaults.AuthenticationScheme },
-                    { "returnUrl", Url.Action(nameof(FacebookCallback)) }
+                    return BadRequest(new { 
+                        message = "Google authentication failed.",
+                        details = "Authentication result was not successful"
+                    });
                 }
-            };
-            return Challenge(properties, FacebookDefaults.AuthenticationScheme);
-        }
 
-        [HttpGet("facebook-callback")]
-        public async Task<IActionResult> FacebookCallback()
-        {
-            var result = await HttpContext.AuthenticateAsync(FacebookDefaults.AuthenticationScheme);
-            if (!result.Succeeded)
-                return BadRequest(new { message = "Facebook authentication failed." });
+                var claims = result.Principal?.Claims;
+                var email = claims?.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+                var name = claims?.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
 
-            var claims = result.Principal?.Claims;
-            var email = claims?.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
-            var name = claims?.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
+                if (string.IsNullOrEmpty(email))
+                    return BadRequest(new { message = "Email not provided by Google." });
 
-            if (string.IsNullOrEmpty(email))
-                return BadRequest(new { message = "Email not provided by Facebook." });
+                var user = await _authService.GetUserByEmailAsync(email);
+                var isNewUser = false;
 
-            var user = await _authService.GetUserByEmailAsync(email);
-            var isNewUser = false;
-
-            if (user == null)
-            {
-                // Create new user from Facebook OAuth
-                user = new mstUser
+                if (user == null)
                 {
-                    strGUID = Guid.NewGuid().ToString(),
-                    strName = name ?? "Facebook User",
-                    strEmailId = email,
-                    bolsActive = true,
-                    strPassword = _authService.HashPassword(Guid.NewGuid().ToString()), // Hash random password for OAuth users
-                    strOTP = "000000", // Default OTP for OAuth users
-                    OtpExpiretIme = DateTime.UtcNow.AddHours(24), // OTP expires in 24 hours
-                    createDate = DateTime.UtcNow,
-                    ModifyDate = DateTime.UtcNow
-                };
-                _context.mstUsers.Add(user);
-                await _context.SaveChangesAsync();
-                isNewUser = true;
-            }
+                    // Create new user from Google OAuth
+                    user = new mstUser
+                    {
+                        strGUID = Guid.NewGuid().ToString(),
+                        strName = name ?? "Google User",
+                        strEmailId = email,
+                        bolsActive = true,
+                        strPassword = _authService.HashPassword(Guid.NewGuid().ToString()), // Hash random password for OAuth users
+                        strOTP = "000000", // Default OTP for OAuth users
+                        OtpExpiretIme = DateTime.UtcNow.AddHours(24), // OTP expires in 24 hours
+                        createDate = DateTime.UtcNow,
+                        ModifyDate = DateTime.UtcNow
+                    };
+                    _context.mstUsers.Add(user);
+                    await _context.SaveChangesAsync();
+                    isNewUser = true;
+                }
 
-            var token = _authService.GenerateJwtToken(user);
-            return Redirect($"/auth-success?token={token}&provider=facebook&isNewUser={isNewUser}");
+                var token = _authService.GenerateJwtToken(user);
+                
+                // Redirect to success page with token and user info
+                var userInfo = new UserReadDTO
+                {
+                    strGUID = user.strGUID,
+                    strName = user.strName,
+                    strEmailId = user.strEmailId,
+                    bolsActive = user.bolsActive,
+                    createDate = user.createDate,
+                    ModifyDate = user.ModifyDate,
+                    AuthProvider = "google"
+                };
+
+                var responseData = new AuthResponseDTO
+                {
+                    Token = token,
+                    User = userInfo,
+                    AuthProvider = "google",
+                    IsNewUser = isNewUser,
+                    Message = isNewUser ? "Account created successfully with Google!" : "Login successful with Google!"
+                };
+
+                // For API calls, return JSON. For browser redirects, redirect to success page
+                var acceptHeader = Request.Headers["Accept"].ToString();
+                if (acceptHeader.Contains("application/json"))
+                {
+                    return Ok(responseData);
+                }
+
+                return Redirect($"https://localhost:3000/oauth-callback?token={token}&provider=google&isNewUser={isNewUser}");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { 
+                    message = "Error processing Google authentication",
+                    error = ex.Message,
+                    details = ex.StackTrace
+                });
+            }
         }
+
+
 
         [HttpPost("logout")]
         public async Task<IActionResult> Logout()
         {
             await HttpContext.SignOutAsync();
             return Ok(new { message = "Logged out successfully." });
+        }
+
+        [HttpGet("test")]
+        public IActionResult Test()
+        {
+            return Ok(new { 
+                message = "Backend is running successfully!",
+                timestamp = DateTime.UtcNow,
+                googleClientId = _configuration["Authentication:Google:ClientId"]?.Substring(0, 20) + "..."
+            });
         }
 
         [HttpPost("refresh-token")]

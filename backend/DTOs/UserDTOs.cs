@@ -28,7 +28,7 @@ namespace MoneyCareBackend.DTOs
         public bool bolsActive { get; set; }
         public DateTime createDate { get; set; }
         public DateTime ModifyDate { get; set; }
-        public string? AuthProvider { get; set; } // "email", "google", "microsoft", "facebook"
+        public string? AuthProvider { get; set; } // "email", "google"
     }
 
     public class UserUpdateDTO
@@ -88,7 +88,7 @@ namespace MoneyCareBackend.DTOs
         public string? Password { get; set; }
 
         [Required(ErrorMessage = "OAuth provider is required.")]
-        public string? OAuthProvider { get; set; } // "google", "microsoft", "facebook"
+        public string? OAuthProvider { get; set; } // "google"
     }
 
     public class ForgotPasswordDTO

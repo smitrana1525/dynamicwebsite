@@ -1,33 +1,27 @@
 # MoneyCare Frontend
 
-A modern React frontend for the MoneyCare financial management application, built with TypeScript, Tailwind CSS, and shadcn/ui components.
+A modern React TypeScript frontend for the MoneyCare financial management application.
 
 ## Features
 
-- 🔐 **Authentication System** - Secure login with JWT tokens
-- 📊 **Dashboard** - Beautiful financial overview with charts and stats
-- 🎨 **Modern UI** - Built with shadcn/ui and Tailwind CSS
-- 📱 **Responsive Design** - Works on all device sizes
-- 🔒 **Protected Routes** - Automatic redirects based on authentication status
+- **Authentication System**
+  - Email/Password login and registration
+  - OAuth integration (Google, Microsoft, Facebook)
+  - Password reset with OTP verification
+  - JWT token management with refresh tokens
 
-## Tech Stack
+- **User Interface**
+  - Modern, responsive design with Tailwind CSS
+  - Beautiful dashboard with financial overview
+  - Protected routes and authentication state management
 
-- **React 18** with TypeScript
-- **React Router** for navigation
-- **Tailwind CSS** for styling
-- **shadcn/ui** for UI components
-- **Lucide React** for icons
-- **Context API** for state management
-
-## Getting Started
-
-### Prerequisites
+## Prerequisites
 
 - Node.js (v16 or higher)
 - npm or yarn
-- Backend server running on `https://localhost:7001`
+- Backend API running on `https://localhost:7222`
 
-### Installation
+## Installation
 
 1. Install dependencies:
 ```bash
@@ -39,60 +33,102 @@ npm install
 npm start
 ```
 
-3. Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+The application will be available at `http://localhost:3000`
 
-### Available Scripts
+## Backend Integration
 
-- `npm start` - Runs the app in development mode
-- `npm test` - Launches the test runner
-- `npm run build` - Builds the app for production
-- `npm run eject` - Ejects from Create React App (one-way operation)
+This frontend is designed to work with the MoneyCare backend API. Make sure the backend is running on `https://localhost:7222` before using the frontend.
+
+### API Endpoints
+
+The frontend communicates with the following backend endpoints:
+
+- **Authentication**
+  - `POST /api/auth/login` - User login
+  - `POST /api/auth/register` - User registration
+  - `POST /api/auth/forgot-password` - Request password reset
+  - `POST /api/auth/verify-otp` - Verify OTP for password reset
+  - `POST /api/auth/reset-password` - Reset password
+  - `POST /api/auth/refresh-token` - Refresh JWT token
+  - `POST /api/auth/logout` - User logout
+  - `GET /api/auth/profile` - Get user profile
+
+- **OAuth**
+  - `GET /api/auth/google` - Google OAuth login
+  - `GET /api/auth/microsoft` - Microsoft OAuth login
+  - `GET /api/auth/facebook` - Facebook OAuth login
+
+- **User Management**
+  - `GET /api/user` - Get all users (admin)
+  - `GET /api/user/{id}` - Get user by ID
+  - `PUT /api/user/{id}` - Update user
+  - `DELETE /api/user/{id}` - Delete user
+
+## Authentication Flow
+
+1. **Email/Password Login**
+   - User enters email and password
+   - Backend validates credentials and returns JWT token
+   - Frontend stores token and user data in localStorage
+   - User is redirected to dashboard
+
+2. **Registration**
+   - User fills out registration form
+   - Backend creates new user account
+   - User is automatically logged in and redirected to dashboard
+
+3. **OAuth Login**
+   - User clicks OAuth provider button
+   - Frontend redirects to backend OAuth endpoint
+   - Backend handles OAuth flow and redirects back to frontend
+   - Frontend processes the callback and stores authentication data
+
+4. **Password Reset**
+   - User requests password reset
+   - Backend sends OTP to user's email
+   - User enters OTP and new password
+   - Password is updated and user can login
 
 ## Project Structure
 
 ```
 src/
-├── components/
-│   ├── ui/           # shadcn/ui components
-│   ├── Login.tsx     # Login page component
-│   └── Dashboard.tsx # Dashboard component
-├── contexts/
+├── components/          # React components
+│   ├── Login.tsx       # Authentication component
+│   ├── Dashboard.tsx   # Main dashboard
+│   ├── OAuthCallback.tsx # OAuth callback handler
+│   └── ui/             # Reusable UI components
+├── contexts/           # React contexts
 │   └── AuthContext.tsx # Authentication context
-├── lib/
-│   └── utils.ts      # Utility functions
-└── App.tsx           # Main app component
+├── services/           # API services
+│   └── api.ts         # API service functions
+└── App.tsx            # Main application component
 ```
 
-## Authentication
+## Environment Configuration
 
-The app uses JWT tokens for authentication. The authentication flow:
+The frontend is configured to connect to the backend at `https://localhost:7222`. If you need to change this, update the `API_BASE_URL` in `src/services/api.ts`.
 
-1. User enters credentials on the login page
-2. Credentials are sent to the backend API
-3. On successful authentication, JWT token is stored in localStorage
-4. User is redirected to the dashboard
-5. Protected routes check for valid token
+## Available Scripts
 
-## API Integration
+- `npm start` - Start development server
+- `npm build` - Build for production
+- `npm test` - Run tests
+- `npm eject` - Eject from Create React App
 
-The frontend connects to the backend API at `https://localhost:7001`. Make sure your backend server is running and configured to accept requests from the frontend.
+## Dependencies
 
-### API Endpoints Used
+- React 18
+- TypeScript
+- React Router DOM
+- Tailwind CSS
+- Lucide React (icons)
+- Custom UI components
 
-- `POST /api/auth/login` - User authentication
+## Browser Support
 
-## Styling
-
-The app uses Tailwind CSS with a custom design system based on shadcn/ui. The color scheme and components are consistent throughout the application.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
-## License
-
-This project is part of the MoneyCare application.
+The application supports all modern browsers including:
+- Chrome (latest)
+- Firefox (latest)
+- Safari (latest)
+- Edge (latest)

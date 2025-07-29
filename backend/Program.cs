@@ -2,9 +2,8 @@
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
-using Microsoft.AspNetCore.Authentication.MicrosoftAccount;
-using Microsoft.AspNetCore.Authentication.Facebook;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Swashbuckle.AspNetCore;
@@ -19,6 +18,18 @@ builder.Services.AddDbContext<MoneyCareBackend.Data.MoneyCareDbContext>(options 
 // Register AuthService
 builder.Services.AddScoped<IAuthService, AuthService>();
 
+// Add CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowReactApp", policy =>
+    {
+        policy.WithOrigins("http://localhost:3000")
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
+
 builder.Services.AddControllers();
 
 // Configure JWT Authentication
@@ -29,10 +40,11 @@ builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultSignInScheme = "Cookies";
 })
 .AddJwtBearer(options =>
 {
-    options.RequireHttpsMetadata = false;
+    options.RequireHttpsMetadata = true;
     options.SaveToken = true;
     options.TokenValidationParameters = new TokenValidationParameters
     {
@@ -46,20 +58,23 @@ builder.Services.AddAuthentication(options =>
         ClockSkew = TimeSpan.Zero
     };
 })
+.AddCookie("Cookies", options =>
+{
+    options.Cookie.Name = "MoneyCare.Auth";
+    options.Cookie.HttpOnly = false;
+    options.Cookie.SameSite = SameSiteMode.None;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.ExpireTimeSpan = TimeSpan.FromHours(24);
+})
 .AddGoogle(options =>
 {
     options.ClientId = builder.Configuration["Authentication:Google:ClientId"] ?? "";
     options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"] ?? "";
-})
-.AddMicrosoftAccount(options =>
-{
-    options.ClientId = builder.Configuration["Authentication:Microsoft:ClientId"] ?? "";
-    options.ClientSecret = builder.Configuration["Authentication:Microsoft:ClientSecret"] ?? "";
-})
-.AddFacebook(options =>
-{
-    options.AppId = builder.Configuration["Authentication:Facebook:AppId"] ?? "";
-    options.AppSecret = builder.Configuration["Authentication:Facebook:AppSecret"] ?? "";
+    options.CallbackPath = "/api/auth/google-callback";
+    options.SaveTokens = true;
+    options.CorrelationCookie.SameSite = SameSiteMode.None;
+    options.CorrelationCookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.CorrelationCookie.HttpOnly = false;
 });
 
 // Add Swagger services
@@ -103,14 +118,14 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// Use CORS - must be before routing
+app.UseCors("AllowReactApp");
+
 // Serve static files (for auth-success.html)
 app.UseStaticFiles();
 
-// Only use HTTPS redirection in production
-if (!app.Environment.IsDevelopment())
-{
+// Enable HTTPS redirection
 app.UseHttpsRedirection();
-}
 
 app.UseRouting();
 

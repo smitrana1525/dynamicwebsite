@@ -1,39 +1,131 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { apiService } from '../services/api';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, Key } from 'lucide-react';
+
+type AuthMode = 'login' | 'register' | 'forgot-password' | 'verify-otp' | 'reset-password';
 
 const Login: React.FC = () => {
+  const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [name, setName] = useState('');
+  const [otp, setOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const { login, isLoading, error } = useAuth();
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [isOAuthLoading, setIsOAuthLoading] = useState(false);
+  const [otpResponse, setOtpResponse] = useState<any>(null);
+  
+  const { login, register, isLoading, error, clearError, user } = useAuth();
+  const navigate = useNavigate();
+
+  // Single redirect effect - only redirect if user is logged in
+  useEffect(() => {
+    if (user && !isLoading) {
+      console.log('Login: User logged in, redirecting to dashboard');
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, isLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    clearError();
+
     try {
-      await login(email, password);
+      switch (mode) {
+        case 'login':
+          console.log('Login: Starting login process');
+          await login(email, password);
+          console.log('Login: Login successful, useEffect will handle redirect');
+          break;
+        case 'register':
+          await register(name, email, password, confirmPassword);
+          console.log('Register: Registration successful, useEffect will handle redirect');
+          break;
+        case 'forgot-password':
+          const response = await apiService.forgotPassword(email);
+          setOtpResponse(response);
+          setMode('verify-otp');
+          break;
+        case 'verify-otp':
+          await apiService.verifyOTP(email, otp);
+          setMode('reset-password');
+          break;
+        case 'reset-password':
+          await apiService.resetPassword(email, otp, newPassword, confirmNewPassword);
+          setMode('login');
+          setEmail('');
+          setPassword('');
+          setOtp('');
+          setNewPassword('');
+          setConfirmNewPassword('');
+          setOtpResponse(null);
+          break;
+      }
     } catch (error) {
-      // Error is handled by the auth context
+      console.error('Login error:', error);
     }
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">
-            Welcome to MoneyCare
-          </CardTitle>
-          <CardDescription className="text-center">
-            Enter your credentials to access your account
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+  const handleOAuthLogin = async () => {
+    setIsOAuthLoading(true);
+    try {
+      const url = apiService.getGoogleAuthUrl();
+      window.location.href = url;
+    } catch (error) {
+      console.error('Google login failed:', error);
+    } finally {
+      setIsOAuthLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setEmail('');
+    setPassword('');
+    setConfirmPassword('');
+    setName('');
+    setOtp('');
+    setNewPassword('');
+    setConfirmNewPassword('');
+    setShowPassword(false);
+    setShowNewPassword(false);
+    setOtpResponse(null);
+    clearError();
+  };
+
+  const getModeTitle = () => {
+    switch (mode) {
+      case 'login': return 'Welcome to MoneyCare';
+      case 'register': return 'Create Account';
+      case 'forgot-password': return 'Forgot Password';
+      case 'verify-otp': return 'Verify OTP';
+      case 'reset-password': return 'Reset Password';
+    }
+  };
+
+  const getModeDescription = () => {
+    switch (mode) {
+      case 'login': return 'Enter your credentials to access your account';
+      case 'register': return 'Create a new account to get started';
+      case 'forgot-password': return 'Enter your email to receive a reset code';
+      case 'verify-otp': return 'Enter the 6-digit code sent to your email';
+      case 'reset-password': return 'Enter your new password';
+    }
+  };
+
+  const renderForm = () => {
+    switch (mode) {
+      case 'login':
+        return (
+          <>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <div className="relative">
@@ -79,20 +171,342 @@ const Login: React.FC = () => {
               </div>
             </div>
 
+            <div className="flex justify-between items-center">
+              <Button
+                type="button"
+                variant="link"
+                className="text-sm"
+                onClick={() => {
+                  resetForm();
+                  setMode('forgot-password');
+                }}
+              >
+                Forgot password?
+              </Button>
+              <Button
+                type="button"
+                variant="link"
+                className="text-sm"
+                onClick={() => {
+                  resetForm();
+                  setMode('register');
+                }}
+              >
+                Create account
+              </Button>
+            </div>
+          </>
+        );
+
+      case 'register':
+        return (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="name">Full Name</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Enter your full name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="pl-10"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="pl-10"
+                  required
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pl-10 pr-10"
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="Confirm your password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="pl-10"
+                  required
+                />
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              variant="link"
+              className="text-sm"
+              onClick={() => {
+                resetForm();
+                setMode('login');
+              }}
+            >
+              Already have an account? Sign in
+            </Button>
+          </>
+        );
+
+      case 'forgot-password':
+        return (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="pl-10"
+                  required
+                />
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              variant="link"
+              className="text-sm"
+              onClick={() => {
+                resetForm();
+                setMode('login');
+              }}
+            >
+              Back to login
+            </Button>
+          </>
+        );
+
+      case 'verify-otp':
+        return (
+          <>
+            {otpResponse && (
+              <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-md mb-4">
+                <p>OTP sent to: {otpResponse.Email}</p>
+                {otpResponse.OTP && (
+                  <p className="font-mono text-lg font-bold mt-2">OTP: {otpResponse.OTP}</p>
+                )}
+                <p className="text-xs mt-1">Expires in: {otpResponse.RemainingMinutes} minutes</p>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="otp">OTP Code</Label>
+              <div className="relative">
+                <Key className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="otp"
+                  type="text"
+                  placeholder="Enter 6-digit code"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value)}
+                  className="pl-10"
+                  maxLength={6}
+                  required
+                />
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              variant="link"
+              className="text-sm"
+              onClick={() => {
+                setMode('forgot-password');
+                setOtp('');
+              }}
+            >
+              Back to forgot password
+            </Button>
+          </>
+        );
+
+      case 'reset-password':
+        return (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="newPassword">New Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="newPassword"
+                  type={showNewPassword ? 'text' : 'password'}
+                  placeholder="Enter new password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="pl-10 pr-10"
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                >
+                  {showNewPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirmNewPassword">Confirm New Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="confirmNewPassword"
+                  type="password"
+                  placeholder="Confirm new password"
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  className="pl-10"
+                  required
+                />
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              variant="link"
+              className="text-sm"
+              onClick={() => {
+                setMode('verify-otp');
+                setNewPassword('');
+                setConfirmNewPassword('');
+              }}
+            >
+              Back to OTP verification
+            </Button>
+          </>
+        );
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold text-center">
+            {getModeTitle()}
+          </CardTitle>
+          <CardDescription className="text-center">
+            {getModeDescription()}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {renderForm()}
+
             {error && (
               <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md">
                 {error}
               </div>
             )}
 
+
+
             <Button
               type="submit"
               className="w-full"
               disabled={isLoading}
             >
-              {isLoading ? 'Signing in...' : 'Sign In'}
+              {isLoading ? 'Processing...' : 
+                mode === 'login' ? 'Sign In' :
+                mode === 'register' ? 'Create Account' :
+                mode === 'forgot-password' ? 'Send Reset Code' :
+                mode === 'verify-otp' ? 'Verify OTP' :
+                'Reset Password'
+              }
             </Button>
+
+
           </form>
+
+          {/* OAuth Buttons - Only show on login/register */}
+          {(mode === 'login' || mode === 'register') && (
+            <>
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-white px-2 text-muted-foreground">
+                    Or continue with
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleOAuthLogin}
+                  disabled={isOAuthLoading}
+                  className="flex items-center justify-center space-x-2"
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 24 24">
+                    <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  </svg>
+                  <span>Continue with Google</span>
+                </Button>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>
