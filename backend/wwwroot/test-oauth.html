@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google OAuth Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .button {
+            background-color: #4285f4;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .button:hover {
+            background-color: #357abd;
+        }
+        .info-box {
+            background-color: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .error-box {
+            background-color: #ffe7e7;
+            border: 1px solid #ffb3b3;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        pre {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 15px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .url-display {
+            word-break: break-all;
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Google OAuth Test</h1>
+        
+        <div class="info-box">
+            <h3>Testing Google OAuth Configuration</h3>
+            <p>This page will help us debug the Google OAuth 404 error.</p>
+        </div>
+
+        <div>
+            <button class="button" onclick="testBackend()">1. Test Backend Configuration</button>
+            <button class="button" onclick="testDirectOAuth()">2. Test Direct OAuth URL</button>
+            <button class="button" onclick="testBackendOAuth()">3. Test Backend OAuth Endpoint</button>
+        </div>
+
+        <div id="results"></div>
+
+        <div class="info-box">
+            <h3>Expected OAuth URL Format</h3>
+            <p>The correct Google OAuth URL should be:</p>
+            <div class="url-display">
+                https://accounts.google.com/o/oauth2/v2/auth?client_id=YOUR_CLIENT_ID&redirect_uri=YOUR_REDIRECT_URI&response_type=code&scope=openid%20email%20profile&state=STATE&access_type=offline&prompt=consent
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BACKEND_URL = 'https://localhost:7222';
+
+        function showResult(title, content, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = type === 'error' ? 'error-box' : 'info-box';
+            
+            div.innerHTML = `
+                <h3>${title}</h3>
+                <pre>${typeof content === 'object' ? JSON.stringify(content, null, 2) : content}</pre>
+            `;
+            
+            resultsDiv.appendChild(div);
+        }
+
+        async function testBackend() {
+            try {
+                showResult('Testing Backend Configuration', 'Making request to backend...', 'info');
+                
+                const response = await fetch(`${BACKEND_URL}/api/auth/test`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                showResult('Backend Configuration', data, 'info');
+                
+                // Show the OAuth URL that should be used
+                if (data.oauthUrl) {
+                    showResult('Generated OAuth URL', data.oauthUrl, 'info');
+                }
+                
+            } catch (error) {
+                showResult('Backend Test Failed', error.message, 'error');
+            }
+        }
+
+        function testDirectOAuth() {
+            const clientId = '398112229294-j8ho6v76sugenaj9q5l54fvbq8a8i9mm.apps.googleusercontent.com';
+            const redirectUri = 'https://localhost:7222/api/auth/google-callback';
+            const state = 'test-state-' + Date.now();
+            
+            const oauthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+                `client_id=${encodeURIComponent(clientId)}` +
+                `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+                `&response_type=code` +
+                `&scope=${encodeURIComponent('openid email profile')}` +
+                `&state=${encodeURIComponent(state)}` +
+                `&access_type=offline` +
+                `&prompt=consent`;
+
+            showResult('Direct OAuth URL Test', oauthUrl, 'info');
+            
+            // Open the URL in a new window
+            window.open(oauthUrl, '_blank');
+        }
+
+        function testBackendOAuth() {
+            showResult('Testing Backend OAuth Endpoint', 'Redirecting to backend OAuth endpoint...', 'info');
+            
+            // Redirect to the backend OAuth endpoint
+            window.location.href = `${BACKEND_URL}/api/auth/google`;
+        }
+
+        // Check if we're returning from OAuth callback
+        window.onload = function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+            const error = urlParams.get('error');
+            const code = urlParams.get('code');
+            
+            if (token) {
+                showResult('OAuth Success!', {
+                    message: 'Google OAuth authentication successful!',
+                    token: token.substring(0, 50) + '...',
+                    provider: urlParams.get('provider') || 'google',
+                    isNewUser: urlParams.get('isNewUser') === 'true'
+                }, 'info');
+            } else if (error) {
+                showResult('OAuth Error', {
+                    error: error,
+                    errorDescription: urlParams.get('error_description') || 'Unknown error'
+                }, 'error');
+            } else if (code) {
+                showResult('Authorization Code Received', {
+                    code: code,
+                    state: urlParams.get('state'),
+                    message: 'Authorization code received from Google. This should be exchanged for an access token.'
+                }, 'info');
+            }
+        };
+    </script>
+</body>
+</html> 

@@ -8,6 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Swashbuckle.AspNetCore;
 using MoneyCareBackend.Services;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,19 +19,42 @@ builder.Services.AddDbContext<MoneyCareBackend.Data.MoneyCareDbContext>(options 
 // Register AuthService
 builder.Services.AddScoped<IAuthService, AuthService>();
 
+// Register EmailService
+builder.Services.AddScoped<IEmailService, EmailService>();
+
 // Add CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", policy =>
     {
-        policy.WithOrigins("http://localhost:3000")
+        policy.WithOrigins("http://localhost:3000", "https://localhost:3000")
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials();
+              .AllowCredentials()
+              .SetIsOriginAllowed(origin => true);
     });
 });
 
 builder.Services.AddControllers();
+
+// Add session support
+builder.Services.AddDistributedMemoryCache();
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromMinutes(10);
+    options.Cookie.HttpOnly = false;
+    options.Cookie.IsEssential = true;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.None;
+});
+
+// Add forwarded headers support
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
@@ -61,10 +85,11 @@ builder.Services.AddAuthentication(options =>
 .AddCookie("Cookies", options =>
 {
     options.Cookie.Name = "MoneyCare.Auth";
-    options.Cookie.HttpOnly = false;
-    options.Cookie.SameSite = SameSiteMode.None;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     options.ExpireTimeSpan = TimeSpan.FromHours(24);
+    options.Cookie.Path = "/";
 })
 .AddGoogle(options =>
 {
@@ -72,9 +97,28 @@ builder.Services.AddAuthentication(options =>
     options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"] ?? "";
     options.CallbackPath = "/api/auth/google-callback";
     options.SaveTokens = true;
-    options.CorrelationCookie.SameSite = SameSiteMode.None;
-    options.CorrelationCookie.SecurePolicy = CookieSecurePolicy.Always;
-    options.CorrelationCookie.HttpOnly = false;
+    
+    // Configure correlation cookie for OAuth state management
+    options.CorrelationCookie.SameSite = SameSiteMode.Lax;
+    options.CorrelationCookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    options.CorrelationCookie.HttpOnly = true;
+    options.CorrelationCookie.MaxAge = TimeSpan.FromMinutes(10);
+    options.CorrelationCookie.Path = "/";
+    
+    // Configure events for better debugging
+    options.Events = new Microsoft.AspNetCore.Authentication.OAuth.OAuthEvents
+    {
+        OnRemoteFailure = context =>
+        {
+            Console.WriteLine($"OAuth Remote Failure: {context.Failure?.Message}");
+            return Task.CompletedTask;
+        },
+        OnTicketReceived = context =>
+        {
+            Console.WriteLine("OAuth Ticket Received");
+            return Task.CompletedTask;
+        }
+    };
 });
 
 // Add Swagger services
@@ -118,21 +162,29 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// Use CORS - must be before routing
-app.UseCors("AllowReactApp");
+// 1. Forwarded Headers - MUST be first for OAuth to work properly
+app.UseForwardedHeaders();
 
-// Serve static files (for auth-success.html)
-app.UseStaticFiles();
-
-// Enable HTTPS redirection
+// 2. HTTPS Redirection
 app.UseHttpsRedirection();
 
+// 3. Static Files
+app.UseStaticFiles();
+
+// 4. CORS - must be before routing
+app.UseCors("AllowReactApp");
+
+// 5. Routing
 app.UseRouting();
 
-// Add authentication and authorization middleware
+// 6. Session - MUST be before authentication
+app.UseSession();
+
+// 7. Authentication and Authorization
 app.UseAuthentication();
 app.UseAuthorization();
 
+// 8. Endpoints
 app.MapControllers();
 
 app.Run();

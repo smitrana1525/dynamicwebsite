@@ -7,22 +7,19 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Eye, EyeOff, Mail, Lock, User, Key } from 'lucide-react';
+import PasswordReset from './PasswordReset';
 
-type AuthMode = 'login' | 'register' | 'forgot-password' | 'verify-otp' | 'reset-password';
+type AuthMode = 'login' | 'register';
 
 const Login: React.FC = () => {
   const [mode, setMode] = useState<AuthMode>('login');
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
-  const [otp, setOtp] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
   const [isOAuthLoading, setIsOAuthLoading] = useState(false);
-  const [otpResponse, setOtpResponse] = useState<any>(null);
   
   const { login, register, isLoading, error, clearError, user } = useAuth();
   const navigate = useNavigate();
@@ -50,25 +47,6 @@ const Login: React.FC = () => {
           await register(name, email, password, confirmPassword);
           console.log('Register: Registration successful, useEffect will handle redirect');
           break;
-        case 'forgot-password':
-          const response = await apiService.forgotPassword(email);
-          setOtpResponse(response);
-          setMode('verify-otp');
-          break;
-        case 'verify-otp':
-          await apiService.verifyOTP(email, otp);
-          setMode('reset-password');
-          break;
-        case 'reset-password':
-          await apiService.resetPassword(email, otp, newPassword, confirmNewPassword);
-          setMode('login');
-          setEmail('');
-          setPassword('');
-          setOtp('');
-          setNewPassword('');
-          setConfirmNewPassword('');
-          setOtpResponse(null);
-          break;
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -92,12 +70,7 @@ const Login: React.FC = () => {
     setPassword('');
     setConfirmPassword('');
     setName('');
-    setOtp('');
-    setNewPassword('');
-    setConfirmNewPassword('');
     setShowPassword(false);
-    setShowNewPassword(false);
-    setOtpResponse(null);
     clearError();
   };
 
@@ -105,9 +78,7 @@ const Login: React.FC = () => {
     switch (mode) {
       case 'login': return 'Welcome to MoneyCare';
       case 'register': return 'Create Account';
-      case 'forgot-password': return 'Forgot Password';
-      case 'verify-otp': return 'Verify OTP';
-      case 'reset-password': return 'Reset Password';
+      default: return 'Welcome to MoneyCare';
     }
   };
 
@@ -115,9 +86,7 @@ const Login: React.FC = () => {
     switch (mode) {
       case 'login': return 'Enter your credentials to access your account';
       case 'register': return 'Create a new account to get started';
-      case 'forgot-password': return 'Enter your email to receive a reset code';
-      case 'verify-otp': return 'Enter the 6-digit code sent to your email';
-      case 'reset-password': return 'Enter your new password';
+      default: return 'Enter your credentials to access your account';
     }
   };
 
@@ -176,10 +145,7 @@ const Login: React.FC = () => {
                 type="button"
                 variant="link"
                 className="text-sm"
-                onClick={() => {
-                  resetForm();
-                  setMode('forgot-password');
-                }}
+                onClick={() => setShowPasswordReset(true)}
               >
                 Forgot password?
               </Button>
@@ -292,147 +258,16 @@ const Login: React.FC = () => {
           </>
         );
 
-      case 'forgot-password':
-        return (
-          <>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10"
-                  required
-                />
-              </div>
-            </div>
 
-            <Button
-              type="button"
-              variant="link"
-              className="text-sm"
-              onClick={() => {
-                resetForm();
-                setMode('login');
-              }}
-            >
-              Back to login
-            </Button>
-          </>
-        );
-
-      case 'verify-otp':
-        return (
-          <>
-            {otpResponse && (
-              <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-md mb-4">
-                <p>OTP sent to: {otpResponse.Email}</p>
-                {otpResponse.OTP && (
-                  <p className="font-mono text-lg font-bold mt-2">OTP: {otpResponse.OTP}</p>
-                )}
-                <p className="text-xs mt-1">Expires in: {otpResponse.RemainingMinutes} minutes</p>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="otp">OTP Code</Label>
-              <div className="relative">
-                <Key className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="otp"
-                  type="text"
-                  placeholder="Enter 6-digit code"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  className="pl-10"
-                  maxLength={6}
-                  required
-                />
-              </div>
-            </div>
-
-            <Button
-              type="button"
-              variant="link"
-              className="text-sm"
-              onClick={() => {
-                setMode('forgot-password');
-                setOtp('');
-              }}
-            >
-              Back to forgot password
-            </Button>
-          </>
-        );
-
-      case 'reset-password':
-        return (
-          <>
-            <div className="space-y-2">
-              <Label htmlFor="newPassword">New Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="newPassword"
-                  type={showNewPassword ? 'text' : 'password'}
-                  placeholder="Enter new password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="pl-10 pr-10"
-                  required
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                  onClick={() => setShowNewPassword(!showNewPassword)}
-                >
-                  {showNewPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="confirmNewPassword">Confirm New Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="confirmNewPassword"
-                  type="password"
-                  placeholder="Confirm new password"
-                  value={confirmNewPassword}
-                  onChange={(e) => setConfirmNewPassword(e.target.value)}
-                  className="pl-10"
-                  required
-                />
-              </div>
-            </div>
-
-            <Button
-              type="button"
-              variant="link"
-              className="text-sm"
-              onClick={() => {
-                setMode('verify-otp');
-                setNewPassword('');
-                setConfirmNewPassword('');
-              }}
-            >
-              Back to OTP verification
-            </Button>
-          </>
-        );
     }
   };
+
+  // Show PasswordReset component if requested
+  if (showPasswordReset) {
+    return (
+      <PasswordReset onBackToLogin={() => setShowPasswordReset(false)} />
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
@@ -455,23 +290,15 @@ const Login: React.FC = () => {
               </div>
             )}
 
-
-
             <Button
               type="submit"
               className="w-full"
               disabled={isLoading}
             >
               {isLoading ? 'Processing...' : 
-                mode === 'login' ? 'Sign In' :
-                mode === 'register' ? 'Create Account' :
-                mode === 'forgot-password' ? 'Send Reset Code' :
-                mode === 'verify-otp' ? 'Verify OTP' :
-                'Reset Password'
+                mode === 'login' ? 'Sign In' : 'Create Account'
               }
             </Button>
-
-
           </form>
 
           {/* OAuth Buttons - Only show on login/register */}

@@ -6,6 +6,7 @@ using MoneyCareBackend.Models;
 using MoneyCareBackend.Data;
 using MoneyCareBackend.DTOs;
 using System.Security.Claims;
+using System.Net.Http;
 
 namespace MoneyCareBackend.Controllers
 {
@@ -16,12 +17,16 @@ namespace MoneyCareBackend.Controllers
         private readonly IAuthService _authService;
         private readonly MoneyCareDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly IEmailService _emailService;
+        private readonly ILogger<AuthController> _logger;
 
-        public AuthController(IAuthService authService, MoneyCareDbContext context, IConfiguration configuration)
+        public AuthController(IAuthService authService, MoneyCareDbContext context, IConfiguration configuration, IEmailService emailService, ILogger<AuthController> logger)
         {
             _authService = authService;
             _context = context;
             _configuration = configuration;
+            _emailService = emailService;
+            _logger = logger;
         }
 
         [HttpPost("register")]
@@ -141,18 +146,30 @@ namespace MoneyCareBackend.Controllers
 
             await _context.SaveChangesAsync();
 
-            // In production, send OTP via email/SMS here
-            // For now, we'll return it in the response for testing
-            return Ok(new OTPResponseDTO
+            // Send OTP via email
+            _logger.LogInformation($"Attempting to send OTP email to {user.strEmailId} with OTP: {otp}");
+            var emailSent = await _emailService.SendOTPEmailAsync(user.strEmailId, otp, user.strName ?? "User");
+            
+            if (!emailSent)
+            {
+                _logger.LogWarning($"Failed to send OTP email to {user.strEmailId}");
+                return StatusCode(500, new { message = "Failed to send OTP email. Please try again later." });
+            }
+
+            _logger.LogInformation($"OTP sent successfully to {user.strEmailId}");
+
+            var response = new OTPResponseDTO
             {
                 Success = true,
                 Message = "OTP has been sent to your email address.",
                 Email = user.strEmailId,
                 ExpiresAt = otpExpiry,
-                RemainingMinutes = 10,
-                // Note: In production, remove this line and send OTP via email/SMS
-                OTP = otp // Remove this in production!
-            });
+                RemainingMinutes = 10
+                // OTP is not returned in response for security
+            };
+
+            _logger.LogInformation($"Returning response: {System.Text.Json.JsonSerializer.Serialize(response)}");
+            return Ok(response);
         }
 
         [HttpPost("verify-otp")]
@@ -205,10 +222,24 @@ namespace MoneyCareBackend.Controllers
 
             await _context.SaveChangesAsync();
 
+            // Send password reset confirmation email
+            var emailSent = await _emailService.SendPasswordResetEmailAsync(user.strEmailId, user.strName ?? "User");
+            
+            if (!emailSent)
+            {
+                _logger.LogWarning($"Failed to send password reset confirmation email to {user.strEmailId}");
+                // Don't fail the request if confirmation email fails
+            }
+            else
+            {
+                _logger.LogInformation($"Password reset confirmation email sent successfully to {user.strEmailId}");
+            }
+
             return Ok(new { 
                 Success = true, 
                 Message = "Password has been reset successfully. You can now login with your new password.",
-                Email = user.strEmailId
+                Email = user.strEmailId,
+                RedirectToLogin = true
             });
         }
 
@@ -228,41 +259,25 @@ namespace MoneyCareBackend.Controllers
                 });
             }
 
-            // Check if request is from Swagger UI or API testing tools
-            var acceptHeader = Request.Headers["Accept"].ToString();
-            var userAgent = Request.Headers["User-Agent"].ToString();
-            
-            // If it's a browser request or from frontend, proceed with OAuth
-            if (string.IsNullOrEmpty(acceptHeader) || 
-                acceptHeader.Contains("text/html") || 
-                acceptHeader.Contains("application/json") ||
-                userAgent.Contains("Mozilla") ||
-                userAgent.Contains("Chrome") ||
-                userAgent.Contains("Safari") ||
-                userAgent.Contains("Firefox"))
-            {
-                var properties = new AuthenticationProperties
-                {
-                    RedirectUri = "/api/auth/google-callback",
-                    Items =
-                    {
-                        { "scheme", GoogleDefaults.AuthenticationScheme },
-                        { "returnUrl", "/api/auth/google-callback" }
-                    },
-                    // Add correlation cookie settings
-                    IsPersistent = false,
-                    ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(5)
-                };
-                return Challenge(properties, GoogleDefaults.AuthenticationScheme);
-            }
+            Console.WriteLine($"=== OAuth Login Debug ===");
+            Console.WriteLine($"Client ID: {clientId?.Substring(0, 20)}...");
+            Console.WriteLine($"Redirect URI: {Request.Scheme}://{Request.Host}/api/auth/google-callback");
+            Console.WriteLine($"=== End Login Debug ===");
 
-            // For Swagger UI or other API testing tools, return the redirect URL
-            return Ok(new { 
-                message = "OAuth redirect detected from API testing tool",
-                note = "This endpoint redirects to Google OAuth. Use a browser to test the complete flow.",
-                redirectUrl = $"https://accounts.google.com/oauth/authorize?client_id={clientId}&redirect_uri={Uri.EscapeDataString($"http://localhost:5122/api/auth/google-callback")}&response_type=code&scope=openid email profile",
-                instructions = "1. Copy the redirectUrl above\n2. Open it in a browser\n3. Complete Google OAuth flow\n4. You'll be redirected back with a token"
-            });
+            // Use ASP.NET Core OAuth middleware with proper authentication properties
+            var properties = new AuthenticationProperties
+            {
+                RedirectUri = "/api/auth/google-callback",
+                Items =
+                {
+                    { "scheme", GoogleDefaults.AuthenticationScheme },
+                    { "returnUrl", "/api/auth/google-callback" }
+                },
+                IsPersistent = false,
+                ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(10)
+            };
+
+            return Challenge(properties, GoogleDefaults.AuthenticationScheme);
         }
 
         [HttpGet("google-callback")]
@@ -281,25 +296,34 @@ namespace MoneyCareBackend.Controllers
         {
             try
             {
+                Console.WriteLine($"=== OAuth Callback Debug ===");
+                Console.WriteLine($"Query String: {Request.QueryString}");
+                Console.WriteLine($"Headers: {string.Join(", ", Request.Headers.Select(h => $"{h.Key}={h.Value}"))}");
+                Console.WriteLine($"Cookies: {string.Join(", ", Request.Cookies.Select(c => $"{c.Key}={c.Value}"))}");
+                Console.WriteLine($"=== End Debug ===");
+
                 // Check for OAuth errors first
                 var error = Request.Query["error"].ToString();
                 var errorDescription = Request.Query["error_description"].ToString();
                 
                 if (!string.IsNullOrEmpty(error))
                 {
+                    Console.WriteLine($"Google OAuth Error: {error} - {errorDescription}");
                     return BadRequest(new { 
                         message = $"Google authentication failed: {error}",
                         errorDescription = errorDescription
                     });
                 }
 
-                // Try to authenticate
+                // Use ASP.NET Core OAuth authentication
                 var result = await HttpContext.AuthenticateAsync(GoogleDefaults.AuthenticationScheme);
+                
                 if (!result.Succeeded)
                 {
+                    Console.WriteLine($"OAuth authentication failed: {result.Failure?.Message}");
                     return BadRequest(new { 
                         message = "Google authentication failed.",
-                        details = "Authentication result was not successful"
+                        details = result.Failure?.Message ?? "Authentication result was not successful"
                     });
                 }
 
@@ -367,6 +391,8 @@ namespace MoneyCareBackend.Controllers
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"OAuth callback exception: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
                 return BadRequest(new { 
                     message = "Error processing Google authentication",
                     error = ex.Message,
@@ -387,10 +413,20 @@ namespace MoneyCareBackend.Controllers
         [HttpGet("test")]
         public IActionResult Test()
         {
+            var clientId = _configuration["Authentication:Google:ClientId"];
+            var redirectUri = $"{Request.Scheme}://{Request.Host}/api/auth/google-callback";
+            
             return Ok(new { 
                 message = "Backend is running successfully!",
                 timestamp = DateTime.UtcNow,
-                googleClientId = _configuration["Authentication:Google:ClientId"]?.Substring(0, 20) + "..."
+                googleClientId = clientId?.Substring(0, 20) + "...",
+                googleClientSecret = !string.IsNullOrEmpty(_configuration["Authentication:Google:ClientSecret"]),
+                callbackPath = "/api/auth/google-callback",
+                baseUrl = $"{Request.Scheme}://{Request.Host}",
+                redirectUri = redirectUri,
+                oauthUrl = $"https://accounts.google.com/o/oauth2/v2/auth?client_id={clientId}&redirect_uri={Uri.EscapeDataString(redirectUri)}&response_type=code&scope=openid%20email%20profile",
+                cookies = Request.Cookies.Select(c => new { c.Key, c.Value }).ToList(),
+                headers = Request.Headers.Select(h => new { h.Key, Value = h.Value.ToString() }).ToList()
             });
         }
 

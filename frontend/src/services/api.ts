@@ -48,12 +48,12 @@ export interface AuthResponse {
 }
 
 export interface OTPResponse {
-  Success: boolean;
-  Message: string;
-  Email: string;
-  ExpiresAt: string;
-  RemainingMinutes: number;
-  OTP: string; // For testing only
+  success: boolean;
+  message: string;
+  email: string;
+  expiresAt: string | null;
+  remainingMinutes: number | null;
+  otp?: string; // For testing only
 }
 
 class ApiService {
@@ -119,24 +119,38 @@ class ApiService {
   }
 
   async forgotPassword(email: string): Promise<OTPResponse> {
-    const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ Email: email }),
-    });
-    return this.handleResponse<OTPResponse>(response);
+    try {
+      console.log('API Service: Making forgot password request to:', `${API_BASE_URL}/auth/forgot-password`);
+      console.log('API Service: Request body:', { Email: email });
+      
+      const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ Email: email }),
+      });
+      
+      console.log('API Service: Forgot password response status:', response.status);
+      console.log('API Service: Forgot password response headers:', response.headers);
+      
+      const result = await this.handleResponse<OTPResponse>(response);
+      console.log('API Service: Forgot password parsed response:', result);
+      return result;
+    } catch (error) {
+      console.error('API Service: Forgot password error:', error);
+      throw error;
+    }
   }
 
-  async verifyOTP(email: string, otp: string): Promise<{ Success: boolean; Message: string; Email: string }> {
+  async verifyOTP(email: string, otp: string): Promise<{ success: boolean; message: string; email: string }> {
     const response = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ Email: email, OTP: otp }),
     });
-    return this.handleResponse<{ Success: boolean; Message: string; Email: string }>(response);
+    return this.handleResponse<{ success: boolean; message: string; email: string }>(response);
   }
 
-  async resetPassword(email: string, otp: string, newPassword: string, confirmPassword: string): Promise<{ Success: boolean; Message: string; Email: string }> {
+  async resetPassword(email: string, otp: string, newPassword: string): Promise<{ success: boolean; message: string; email: string; redirectToLogin?: boolean }> {
     const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -144,10 +158,10 @@ class ApiService {
         Email: email, 
         OTP: otp, 
         NewPassword: newPassword, 
-        ConfirmPassword: confirmPassword 
+        ConfirmPassword: newPassword 
       }),
     });
-    return this.handleResponse<{ Success: boolean; Message: string; Email: string }>(response);
+    return this.handleResponse<{ success: boolean; message: string; email: string; redirectToLogin?: boolean }>(response);
   }
 
   async refreshToken(refreshToken: string): Promise<AuthResponse> {
@@ -173,6 +187,33 @@ class ApiService {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<User>(response);
+  }
+
+  // User profile management endpoints
+  async updateUserProfile(id: string, userData: {
+    strName?: string;
+    strEmailId?: string;
+    bolsActive?: boolean;
+    strPassword?: string;
+  }): Promise<User> {
+    const response = await fetch(`${API_BASE_URL}/user/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(userData),
+    });
+    return this.handleResponse<User>(response);
+  }
+
+  async changePassword(id: string, currentPassword: string, newPassword: string): Promise<{ message: string }> {
+    const response = await fetch(`${API_BASE_URL}/user/${id}/change-password`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ 
+        CurrentPassword: currentPassword, 
+        NewPassword: newPassword 
+      }),
+    });
+    return this.handleResponse<{ message: string }>(response);
   }
 
   // OAuth endpoints

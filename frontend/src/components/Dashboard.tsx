@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { apiService, User as ApiUser } from '../services/api';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -34,7 +35,31 @@ import {
   Cloud,
   ChevronDown,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Edit,
+  Plus,
+  Search,
+  Filter,
+  MoreVertical,
+  FileDown,
+  AlertCircle,
+  CheckCircle,
+  Info,
+  Users,
+  Shield,
+  BookOpen,
+  FileCheck,
+  ClipboardList,
+  Bell,
+  Mail,
+  Phone,
+  MapPin,
+  Globe,
+  Lock,
+  Unlock,
+  EyeOff,
+  Save,
+  RotateCcw
 } from 'lucide-react';
 
 interface FileItem {
@@ -44,42 +69,207 @@ interface FileItem {
   type: string;
   uploadDate: Date;
   url?: string;
+  category: string;
+  subcategory: string;
 }
+
+
 
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('home');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  // User profile data from backend
+  const [userProfile, setUserProfile] = useState<ApiUser | null>(null);
+  const [editingData, setEditingData] = useState<{
+    strName: string;
+    bolsActive: boolean;
+  }>({
+    strName: '',
+    bolsActive: true
+  });
+
+  // Mock files data with categories
   const [uploadedFiles, setUploadedFiles] = useState<FileItem[]>([
     {
       id: '1',
-      name: 'Financial_Report_2024.pdf',
+      name: 'Individual CKYC Form.pdf',
       size: '2.4 MB',
       type: 'PDF',
       uploadDate: new Date('2024-01-15'),
-      url: 'https://example.com/files/financial-report-2024.pdf'
+      url: 'https://example.com/files/individual-ckyc-form.pdf',
+      category: 'Combine KYC Forms',
+      subcategory: 'Individual CKYC Form'
     },
     {
       id: '2',
-      name: 'Budget_Planning.xlsx',
+      name: 'Non Individual CKYC Form.pdf',
       size: '1.8 MB',
-      type: 'Excel',
+      type: 'PDF',
       uploadDate: new Date('2024-01-10'),
-      url: 'https://example.com/files/budget-planning.xlsx'
+      url: 'https://example.com/files/non-individual-ckyc-form.pdf',
+      category: 'Combine KYC Forms',
+      subcategory: 'Non Individual CKYC Form'
     },
     {
       id: '3',
-      name: 'Investment_Portfolio.pdf',
+      name: 'Rights and Obligation.pdf',
       size: '3.2 MB',
       type: 'PDF',
       uploadDate: new Date('2024-01-05'),
-      url: 'https://example.com/files/investment-portfolio.pdf'
+      url: 'https://example.com/files/rights-obligation.pdf',
+      category: 'Combine KYC Forms',
+      subcategory: 'Rights and Obligation'
+    },
+    {
+      id: '4',
+      name: 'Multiple Nomination.pdf',
+      size: '1.5 MB',
+      type: 'PDF',
+      uploadDate: new Date('2024-01-12'),
+      url: 'https://example.com/files/multiple-nomination.pdf',
+      category: 'Other Demat Form',
+      subcategory: 'Multiple Nomination'
+    },
+    {
+      id: '5',
+      name: 'Account Closure Form.pdf',
+      size: '2.1 MB',
+      type: 'PDF',
+      uploadDate: new Date('2024-01-08'),
+      url: 'https://example.com/files/account-closure-form.pdf',
+      category: 'Other Demat Form',
+      subcategory: 'Account Closure Form'
+    },
+    {
+      id: '6',
+      name: 'Granting of Exposure to Clients.pdf',
+      size: '4.2 MB',
+      type: 'PDF',
+      uploadDate: new Date('2024-01-03'),
+      url: 'https://example.com/files/granting-exposure-clients.pdf',
+      category: 'Policies',
+      subcategory: 'Granting of Exposure to Clients'
+    },
+    {
+      id: '7',
+      name: 'FATCA Form.pdf',
+      size: '1.9 MB',
+      type: 'PDF',
+      uploadDate: new Date('2024-01-20'),
+      url: 'https://example.com/files/fatca-form.pdf',
+      category: 'Other Forms',
+      subcategory: 'FATCA Form'
+    },
+    {
+      id: '8',
+      name: 'Important DP Circular.pdf',
+      size: '2.8 MB',
+      type: 'PDF',
+      uploadDate: new Date('2024-01-18'),
+      url: 'https://example.com/files/important-dp-circular.pdf',
+      category: 'Important Circulars',
+      subcategory: 'Important DP Circular'
     }
   ]);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  // Categories data
+  const categories = [
+    {
+      id: 'kyc-forms',
+      name: 'Combine KYC Forms',
+      icon: FileCheck,
+      subcategories: [
+        'Individual CKYC Form',
+        'Non Individual CKYC Form',
+        'Rights and Obligation',
+        'Risk Disclosure Documents',
+        'Rights and Obligations for Trading A/c'
+      ]
+    },
+    {
+      id: 'demat-forms',
+      name: 'Other Demat Form',
+      icon: ClipboardList,
+      subcategories: [
+        'Multiple Nomination',
+        'Account Closure Form',
+        'Transposition Form',
+        'Transmission Form',
+        'Name Change Application',
+        'Signature Change Application',
+        'Email – Mobile Declaration',
+        'Permitted To Trade Data',
+        'Demat Tariff',
+        'List of Approved Securities'
+      ]
+    },
+    {
+      id: 'policies',
+      name: 'Policies',
+      icon: Shield,
+      subcategories: [
+        'Granting of Exposure to Clients',
+        'Policy on Handling of Good Till Cancelled (GTC) Orders',
+        'Combined Risk Management and Internal Control Policy',
+        'RMS Manual',
+        'PMLA Policy',
+        'Limit Setting',
+        'Policy of Inactive Accounts',
+        'Pre-funded Instruments',
+        'Code Modification Policy',
+        'Policy on Squaring Off Client Positions',
+        'Policy on Internal Shortage',
+        'Policy For Voluntary Blocking of The Trading Account',
+        'Policy of Outsourced Activities',
+        'Surveillance Policy'
+      ]
+    },
+    {
+      id: 'other-forms',
+      name: 'Other Forms',
+      icon: FileText,
+      subcategories: [
+        'FATCA Form',
+        'KRA Individual Form',
+        'KRA Non Individual Form',
+        'C-KYC Individual Form',
+        'C-KYC Non Individual Form',
+        'Important Exchange Circular',
+        'Important SEBI Circular'
+      ]
+    },
+    {
+      id: 'circulars',
+      name: 'Important Circulars',
+      icon: Bell,
+      subcategories: [
+        'Important DP Circular',
+        'Important Exchange Circular',
+        'Important SEBI Circular',
+        'New Status and Sub-Status for Demat Accounts',
+        'Additional Criteria for Dormant Demat Accounts',
+        'Validation of KYC Records with KRA',
+        'SEBI Master CIR on Surveillance of Securities Market',
+        'SEBI CIR on KYC Upload by Registration Agencies to Central KYC Registry',
+        'Implementation of Two-Factor Authentication in EASI & EASIEST Login',
+        'Review of KYC Validation',
+        'Aadhaar Seeding (Linkage of PAN with Aadhaar)',
+        'SCORES 2.0 – SEBI Complaint Redressal System for Investors'
+      ]
+    }
+  ];
 
   // Update time every second
   useEffect(() => {
@@ -94,27 +284,82 @@ const Dashboard: React.FC = () => {
     await logout();
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
+  // Load user profile when modal opens
+  const loadUserProfile = async () => {
+    if (!user?.strGUID) return;
+    
+    setLoading(true);
+    setError(null);
+    try {
+      const profile = await apiService.getUserById(user.strGUID);
+      setUserProfile(profile);
+      setEditingData({
+        strName: profile.strName || '',
+        bolsActive: profile.bolsActive
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load profile');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleUploadSubmit = () => {
-    if (selectedFile) {
-      const newFile: FileItem = {
-        id: Date.now().toString(),
-        name: selectedFile.name,
-        size: `${(selectedFile.size / 1024 / 1024).toFixed(1)} MB`,
-        type: selectedFile.type.split('/')[1].toUpperCase(),
-        uploadDate: new Date(),
-        url: `https://yourwebsite.com/files/${selectedFile.name}`
-      };
-      setUploadedFiles([newFile, ...uploadedFiles]);
-      setSelectedFile(null);
+  // Handle profile modal open
+  const handleProfileModalOpen = () => {
+    setShowProfileModal(true);
+    loadUserProfile();
+  };
+
+  // Handle profile update
+  const handleProfileUpdate = async () => {
+    if (!user?.strGUID || !userProfile) return;
+    
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    
+    try {
+      const updatedProfile = await apiService.updateUserProfile(user.strGUID, {
+        strName: editingData.strName,
+        bolsActive: editingData.bolsActive
+      });
+      
+      setUserProfile(updatedProfile);
+      setEditingProfile(false);
+      setSuccess('Profile updated successfully! Database has been updated.');
+      
+      // Update the auth context user data if needed
+      // You might need to add a method to update user in AuthContext
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update profile');
+    } finally {
+      setLoading(false);
     }
   };
+
+  // Handle profile delete
+  const handleProfileDelete = async () => {
+    if (!user?.strGUID) return;
+    
+    if (!window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+      return;
+    }
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      await apiService.deleteUser(user.strGUID);
+      setShowProfileModal(false);
+      handleLogout();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete account');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
 
   const handleFileAction = (action: string, file: FileItem) => {
     switch (action) {
@@ -172,9 +417,18 @@ const Dashboard: React.FC = () => {
     });
   };
 
+  const filteredFiles = uploadedFiles.filter(file => {
+    const matchesSearch = file.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         file.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         file.subcategory.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = selectedCategory === 'all' || file.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
+
   const sidebarItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'overview', label: 'Overview', icon: BarChart3 },
+    { id: 'downloads', label: 'Downloads', icon: Download },
     { id: 'files', label: 'Files', icon: FolderOpen },
     { id: 'analytics', label: 'Analytics', icon: PieChart },
     { id: 'goals', label: 'Goals', icon: Target },
@@ -216,66 +470,12 @@ const Dashboard: React.FC = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="text-center p-4 bg-blue-50 rounded-lg">
-                <div className="text-2xl font-bold text-blue-600">$24,500</div>
-                <div className="text-sm text-gray-600">Total Balance</div>
-              </div>
-              <div className="text-center p-4 bg-green-50 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">$8,200</div>
-                <div className="text-sm text-gray-600">Monthly Income</div>
-              </div>
-              <div className="text-center p-4 bg-purple-50 rounded-lg">
-                <div className="text-2xl font-bold text-purple-600">$4,400</div>
-                <div className="text-sm text-gray-600">Total Savings</div>
-              </div>
-            </div>
+            <p className="text-gray-600">
+              Manage your documents, view your profile, and access all your financial services from this dashboard.
+            </p>
           </CardContent>
         </Card>
       </div>
-
-      {/* Calendar Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Calendar className="h-5 w-5" />
-            <span>Today's Schedule</span>
-          </CardTitle>
-          <CardDescription>
-            Your financial activities and reminders for today
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-center space-x-4 p-3 bg-green-50 rounded-lg">
-              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-              <div className="flex-1">
-                <p className="font-medium">Salary Deposit</p>
-                <p className="text-sm text-gray-500">Expected today at 9:00 AM</p>
-              </div>
-              <span className="text-green-600 font-medium">+$4,200</span>
-            </div>
-            
-            <div className="flex items-center space-x-4 p-3 bg-blue-50 rounded-lg">
-              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-              <div className="flex-1">
-                <p className="font-medium">Budget Review Meeting</p>
-                <p className="text-sm text-gray-500">Scheduled for 2:00 PM</p>
-              </div>
-              <span className="text-blue-600 font-medium">Meeting</span>
-            </div>
-            
-            <div className="flex items-center space-x-4 p-3 bg-yellow-50 rounded-lg">
-              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-              <div className="flex-1">
-                <p className="font-medium">Credit Card Payment Due</p>
-                <p className="text-sm text-gray-500">Due in 3 days</p>
-              </div>
-              <span className="text-yellow-600 font-medium">$850</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Quick Actions */}
       <Card>
@@ -287,9 +487,13 @@ const Dashboard: React.FC = () => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Button variant="outline" className="h-20 flex flex-col space-y-2">
-              <Upload className="h-6 w-6" />
-              <span className="text-sm">Upload File</span>
+            <Button 
+              variant="outline" 
+              className="h-20 flex flex-col space-y-2"
+              onClick={() => setActiveTab('downloads')}
+            >
+              <Download className="h-6 w-6" />
+              <span className="text-sm">Downloads</span>
             </Button>
             <Button variant="outline" className="h-20 flex flex-col space-y-2">
               <BarChart3 className="h-6 w-6" />
@@ -299,9 +503,13 @@ const Dashboard: React.FC = () => {
               <Target className="h-6 w-6" />
               <span className="text-sm">Set Goals</span>
             </Button>
-            <Button variant="outline" className="h-20 flex flex-col space-y-2">
-              <Settings className="h-6 w-6" />
-              <span className="text-sm">Settings</span>
+            <Button 
+              variant="outline" 
+              className="h-20 flex flex-col space-y-2"
+              onClick={handleProfileModalOpen}
+            >
+              <User className="h-6 w-6" />
+              <span className="text-sm">Profile</span>
             </Button>
           </div>
         </CardContent>
@@ -309,17 +517,359 @@ const Dashboard: React.FC = () => {
     </div>
   );
 
+  const renderDownloads = () => (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Downloads</h1>
+          <p className="text-gray-600">Access all your documents and forms</p>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Button variant="outline" size="sm">
+            <Filter className="h-4 w-4 mr-2" />
+            Filter
+          </Button>
+          <Button size="sm">
+            <Download className="h-4 w-4 mr-2" />
+            Download All
+          </Button>
+        </div>
+      </div>
+
+      {/* Search and Filter */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search files..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <div className="sm:w-48">
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All Categories</option>
+                {categories.map(category => (
+                  <option key={category.id} value={category.name}>{category.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Categories Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {categories.map((category) => {
+          const Icon = category.icon;
+          const categoryFiles = uploadedFiles.filter(file => file.category === category.name);
+          
+          return (
+            <Card key={category.id} className="hover:shadow-lg transition-shadow cursor-pointer">
+              <CardHeader>
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <Icon className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">{category.name}</CardTitle>
+                    <CardDescription>{categoryFiles.length} files</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {category.subcategories.slice(0, 3).map((subcategory, index) => (
+                    <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <span className="text-sm text-gray-700">{subcategory}</span>
+                      <Button variant="ghost" size="sm">
+                        <Download className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                  {category.subcategories.length > 3 && (
+                    <div className="text-center pt-2">
+                      <Button variant="outline" size="sm">
+                        View All ({category.subcategories.length})
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Files List */}
+      {filteredFiles.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>All Files ({filteredFiles.length})</CardTitle>
+            <CardDescription>
+              Browse and download all available files
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {filteredFiles.map((file) => (
+                <div key={file.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <FileText className="h-6 w-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium">{file.name}</p>
+                      <p className="text-sm text-gray-500">
+                        {file.category} • {file.subcategory} • {file.size} • {file.uploadDate.toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleFileAction('view', file)}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleFileAction('download', file)}
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+
+  const renderProfileModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold">User Profile</h2>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowProfileModal(false)}
+          >
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
+
+        {loading && (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-2 text-gray-600">Loading profile...</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-600">{error}</p>
+          </div>
+        )}
+
+        {success && (
+          <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-green-600">{success}</p>
+          </div>
+        )}
+
+        {userProfile && !loading && (
+          <div className="space-y-6">
+            {/* Profile Header */}
+            <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
+              <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center">
+                <User className="h-10 w-10 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold">{userProfile.strName}</h3>
+                <p className="text-gray-600">{userProfile.strEmailId}</p>
+                <div className="flex items-center space-x-2 mt-2">
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    userProfile.bolsActive 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-red-100 text-red-800'
+                  }`}>
+                    {userProfile.bolsActive ? 'Active' : 'Inactive'}
+                  </span>
+                  <span className="text-sm text-gray-500">Provider: {userProfile.authProvider}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Profile Form */}
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="name">Full Name</Label>
+                  <Input
+                    id="name"
+                    value={editingProfile ? editingData.strName : userProfile.strName}
+                    onChange={(e) => setEditingData({...editingData, strName: e.target.value})}
+                    disabled={!editingProfile}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={userProfile.strEmailId}
+                    disabled
+                    className="bg-gray-50"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Email cannot be changed as it's used for login</p>
+                </div>
+                <div>
+                  <Label htmlFor="status">Status</Label>
+                  <select
+                    id="status"
+                    value={editingProfile ? editingData.bolsActive.toString() : userProfile.bolsActive.toString()}
+                    onChange={(e) => setEditingData({...editingData, bolsActive: e.target.value === 'true'})}
+                    disabled={!editingProfile}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                  </select>
+                </div>
+                <div>
+                  <Label>User ID</Label>
+                  <Input
+                    value={userProfile.strGUID}
+                    disabled
+                    className="bg-gray-50"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Created Date</Label>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {new Date(userProfile.createDate).toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <Label>Last Modified</Label>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {new Date(userProfile.modifyDate).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-between pt-4 border-t">
+              <div className="flex items-center space-x-2">
+                {editingProfile ? (
+                  <>
+                    <Button onClick={handleProfileUpdate} disabled={loading}>
+                      <Save className="h-4 w-4 mr-2" />
+                      {loading ? 'Saving...' : 'Save Changes'}
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setEditingProfile(false);
+                                              setEditingData({
+                        strName: userProfile.strName || '',
+                        bolsActive: userProfile.bolsActive
+                      });
+                      }}
+                      disabled={loading}
+                    >
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      Cancel
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button onClick={() => setEditingProfile(true)} disabled={loading}>
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit Profile
+                    </Button>
+                    <Button variant="outline" disabled={loading}>
+                      <Lock className="h-4 w-4 mr-2" />
+                      Change Password
+                    </Button>
+                  </>
+                )}
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button 
+                  variant="outline" 
+                  className="text-red-600 hover:text-red-700"
+                  onClick={handleProfileDelete}
+                  disabled={loading}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  {loading ? 'Deleting...' : 'Delete Account'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'home':
+        return renderHome();
+      case 'downloads':
+        return renderDownloads();
+      case 'overview':
+        return renderOverview();
+      case 'files':
+        return renderFiles();
+      case 'analytics':
+        return renderAnalytics();
+      case 'goals':
+        return renderGoals();
+      default:
+        return renderHome();
+    }
+  };
+
+  // Keep existing render methods for other tabs
   const renderOverview = () => (
     <div className="space-y-6">
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Balance</CardTitle>
+            <CardTitle className="text-sm font-medium">Portfolio Value</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$24,500</div>
+            <div className="text-2xl font-bold">₹2,45,000</div>
             <p className="text-xs text-muted-foreground">
               +2.1% from last month
             </p>
@@ -328,11 +878,11 @@ const Dashboard: React.FC = () => {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Income</CardTitle>
+            <CardTitle className="text-sm font-medium">Monthly Investment</CardTitle>
             <TrendingUp className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">$8,200</div>
+            <div className="text-2xl font-bold text-green-600">₹82,000</div>
             <p className="text-xs text-muted-foreground">
               +12% from last month
             </p>
@@ -341,26 +891,26 @@ const Dashboard: React.FC = () => {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Expenses</CardTitle>
-            <TrendingDown className="h-4 w-4 text-red-600" />
+            <CardTitle className="text-sm font-medium">Total Returns</CardTitle>
+            <TrendingUp className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">$3,800</div>
+            <div className="text-2xl font-bold text-blue-600">₹44,000</div>
             <p className="text-xs text-muted-foreground">
-              -5% from last month
+              +8% from last month
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Savings</CardTitle>
-            <PiggyBank className="h-4 w-4 text-blue-600" />
+            <CardTitle className="text-sm font-medium">Active Demat A/c</CardTitle>
+            <CreditCard className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">$4,400</div>
+            <div className="text-2xl font-bold text-purple-600">3</div>
             <p className="text-xs text-muted-foreground">
-              +8% from last month
+              All accounts active
             </p>
           </CardContent>
         </Card>
@@ -382,37 +932,37 @@ const Dashboard: React.FC = () => {
                   <TrendingUp className="h-5 w-5 text-green-600" />
                 </div>
                 <div>
-                  <p className="font-medium">Salary Deposit</p>
+                  <p className="font-medium">SIP Investment</p>
                   <p className="text-sm text-gray-500">Today</p>
                 </div>
               </div>
-              <span className="font-bold text-green-600">+$4,200</span>
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-                  <TrendingDown className="h-5 w-5 text-red-600" />
-                </div>
-                <div>
-                  <p className="font-medium">Grocery Shopping</p>
-                  <p className="text-sm text-gray-500">Yesterday</p>
-                </div>
-              </div>
-              <span className="font-bold text-red-600">-$120</span>
+              <span className="font-bold text-green-600">+₹5,000</span>
             </div>
 
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                  <CreditCard className="h-5 w-5 text-blue-600" />
+                  <TrendingUp className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="font-medium">Netflix Subscription</p>
+                  <p className="font-medium">Dividend Received</p>
+                  <p className="text-sm text-gray-500">Yesterday</p>
+                </div>
+              </div>
+              <span className="font-bold text-blue-600">+₹1,200</span>
+            </div>
+
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                  <CreditCard className="h-5 w-5 text-purple-600" />
+                </div>
+                <div>
+                  <p className="font-medium">Demat Account Fee</p>
                   <p className="text-sm text-gray-500">2 days ago</p>
                 </div>
               </div>
-              <span className="font-bold text-red-600">-$15</span>
+              <span className="font-bold text-red-600">-₹500</span>
             </div>
           </div>
         </CardContent>
@@ -422,97 +972,13 @@ const Dashboard: React.FC = () => {
 
   const renderFiles = () => (
     <div className="space-y-6">
-      {/* File Upload Section */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Upload className="h-5 w-5" />
-            <span>Upload Files</span>
-          </CardTitle>
-          <CardDescription>
-            Upload financial documents and reports to your dashboard
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="file-upload">Choose File</Label>
-            <Input
-              id="file-upload"
-              type="file"
-              onChange={handleFileUpload}
-              accept=".pdf,.xlsx,.xls,.doc,.docx,.txt"
-            />
-          </div>
-          {selectedFile && (
-            <div className="p-3 bg-blue-50 rounded-lg">
-              <p className="text-sm font-medium">Selected: {selectedFile.name}</p>
-              <p className="text-xs text-gray-500">
-                Size: {(selectedFile.size / 1024 / 1024).toFixed(1)} MB
-              </p>
-            </div>
-          )}
-          <Button 
-            onClick={handleUploadSubmit}
-            disabled={!selectedFile}
-            className="w-full"
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            Upload File
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Files List */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <FolderOpen className="h-5 w-5" />
-            <span>Your Files</span>
-          </CardTitle>
-          <CardDescription>
-            Manage your uploaded financial documents
-          </CardDescription>
+          <CardTitle>File Management</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {uploadedFiles.map((file) => (
-              <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                    <FileText className="h-5 w-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="font-medium">{file.name}</p>
-                    <p className="text-sm text-gray-500">
-                      {file.size} • {file.type} • {file.uploadDate.toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleFileAction('view', file)}
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleFileAction('download', file)}
-                  >
-                    <Download className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleFileAction('delete', file)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
+          <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center">
+            <p className="text-gray-500">File management interface will be displayed here</p>
           </div>
         </CardContent>
       </Card>
@@ -523,10 +989,7 @@ const Dashboard: React.FC = () => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <PieChart className="h-5 w-5" />
-            <span>Financial Analytics</span>
-          </CardTitle>
+          <CardTitle>Analytics</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -541,106 +1004,28 @@ const Dashboard: React.FC = () => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Target className="h-5 w-5" />
-            <span>Financial Goals</span>
-          </CardTitle>
-          <CardDescription>
-            Track your progress towards financial milestones
-          </CardDescription>
+          <CardTitle>Financial Goals</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Emergency Fund</span>
-                <span>75%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div className="bg-blue-600 h-2 rounded-full" style={{ width: '75%' }}></div>
-              </div>
-              <p className="text-xs text-gray-500">$7,500 / $10,000</p>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Vacation Fund</span>
-                <span>45%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div className="bg-green-600 h-2 rounded-full" style={{ width: '45%' }}></div>
-              </div>
-              <p className="text-xs text-gray-500">$900 / $2,000</p>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Investment Portfolio</span>
-                <span>60%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div className="bg-purple-600 h-2 rounded-full" style={{ width: '60%' }}></div>
-              </div>
-              <p className="text-xs text-gray-500">$12,000 / $20,000</p>
-            </div>
+          <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center">
+            <p className="text-gray-500">Goals tracking will be displayed here</p>
           </div>
         </CardContent>
       </Card>
     </div>
   );
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'home':
-        return renderHome();
-      case 'overview':
-        return renderOverview();
-      case 'files':
-        return renderFiles();
-      case 'analytics':
-        return renderAnalytics();
-      case 'goals':
-        return renderGoals();
-      default:
-        return renderHome();
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Mobile Header */}
-      <div className="lg:hidden bg-white shadow-sm border-b">
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center space-x-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-            >
-              <Menu className="h-6 w-6" />
-            </Button>
-            <DollarSign className="h-8 w-8 text-blue-600" />
-            <h1 className="text-xl font-bold text-gray-900">MoneyCare</h1>
-          </div>
-          <div className="flex items-center space-x-2">
-            <User className="h-5 w-5 text-gray-500" />
-            <span className="text-sm text-gray-700">
-              {user?.strName ? getFirstName(user.strName) : 'User'}
-            </span>
-          </div>
-        </div>
-      </div>
-
       <div className="flex">
-        {/* Sidebar */}
+        {/* Single Toggle Sidebar */}
         <div className={`
-          fixed inset-y-0 left-0 z-50 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0
+          fixed inset-y-0 left-0 z-40 bg-white shadow-lg transform transition-all duration-300 ease-in-out
           ${sidebarCollapsed ? 'w-16' : 'w-64'}
-          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}>
           <div className="flex flex-col h-full">
             {/* Sidebar Header */}
-            <div className="p-6 border-b">
+            <div className="p-4 border-b">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <DollarSign className="h-8 w-8 text-blue-600 flex-shrink-0" />
@@ -648,24 +1033,14 @@ const Dashboard: React.FC = () => {
                     <h1 className="text-xl font-bold text-gray-900">MoneyCare</h1>
                   )}
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                    className="hidden lg:flex"
-                  >
-                    {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSidebarOpen(false)}
-                    className="lg:hidden"
-                  >
-                    <X className="h-5 w-5" />
-                  </Button>
-                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                  className="flex-shrink-0"
+                >
+                  {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                </Button>
               </div>
             </div>
             
@@ -694,10 +1069,7 @@ const Dashboard: React.FC = () => {
                   return (
                     <li key={item.id}>
                       <button
-                        onClick={() => {
-                          setActiveTab(item.id);
-                          setSidebarOpen(false);
-                        }}
+                        onClick={() => setActiveTab(item.id)}
                         className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
                           activeTab === item.id
                             ? 'bg-blue-100 text-blue-700'
@@ -729,38 +1101,19 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Overlay for mobile */}
-        {sidebarOpen && (
-          <div 
-            className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-
         {/* Main Content */}
-        <div className="flex-1 flex flex-col">
-          {/* Desktop Header */}
-          <header className="hidden lg:block bg-white shadow-sm border-b">
+        <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
+          {/* Header */}
+          <header className="bg-white shadow-sm border-b">
             <div className="px-6 py-4">
               <div className="flex justify-between items-center">
-                <div className="flex items-center space-x-4">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                    className="flex items-center space-x-2"
-                  >
-                    <Menu className="h-5 w-5" />
-                    <span>Toggle Sidebar</span>
-                  </Button>
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900">
-                      {sidebarItems.find(item => item.id === activeTab)?.label}
-                    </h2>
-                    <p className="text-gray-600">
-                      Welcome back, {user?.strName ? getFirstName(user.strName) : 'User'}!
-                    </p>
-                  </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {sidebarItems.find(item => item.id === activeTab)?.label}
+                  </h2>
+                  <p className="text-gray-600">
+                    Welcome back, {user?.strName ? getFirstName(user.strName) : 'User'}!
+                  </p>
                 </div>
                 
                 {/* Profile Dropdown */}
@@ -789,15 +1142,21 @@ const Dashboard: React.FC = () => {
                           <div>
                             <p className="font-medium">{user?.strName || 'User'}</p>
                             <p className="text-sm text-gray-500">{user?.strEmailId}</p>
-                            {user?.authProvider && user.authProvider !== 'email' && (
-                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                                {user.authProvider}
-                              </span>
-                            )}
                           </div>
                         </div>
                       </div>
                       <div className="p-2">
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            setProfileDropdownOpen(false);
+                            handleProfileModalOpen();
+                          }}
+                          className="w-full justify-start"
+                        >
+                          <User className="h-4 w-4 mr-2" />
+                          View Profile
+                        </Button>
                         <Button
                           variant="ghost"
                           onClick={() => {
@@ -829,11 +1188,22 @@ const Dashboard: React.FC = () => {
           </header>
 
           {/* Page Content */}
-          <main className="flex-1 p-4 lg:p-6">
+          <main className="flex-1 p-6">
             {renderContent()}
           </main>
         </div>
       </div>
+
+      {/* Profile Modal */}
+      {showProfileModal && renderProfileModal()}
+
+      {/* Click outside to close dropdowns */}
+      {profileDropdownOpen && (
+        <div 
+          className="fixed inset-0 z-40"
+          onClick={() => setProfileDropdownOpen(false)}
+        />
+      )}
     </div>
   );
 };
