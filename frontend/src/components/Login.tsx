@@ -56,11 +56,14 @@ const Login: React.FC = () => {
   const handleOAuthLogin = async () => {
     setIsOAuthLoading(true);
     try {
+      console.log('Initiating Google OAuth login...');
       const url = apiService.getGoogleAuthUrl();
+      console.log('Redirecting to:', url);
+      
+      // Use window.location.href for proper redirect
       window.location.href = url;
     } catch (error) {
       console.error('Google login failed:', error);
-    } finally {
       setIsOAuthLoading(false);
     }
   };

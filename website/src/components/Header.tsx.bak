@@ -1,0 +1,275 @@
+import React, { useState, useEffect } from 'react';
+import { Menu, X, ChevronDown, Phone, Mail } from 'lucide-react';
+import { Link } from 'react-router                          {item.dropdown.map((subItem) => (
+                            <React.Fragment key={subItem.name}>
+                              {subItem.download ? (
+                                <a
+                                  href={subItem.href}
+                                  download={subItem.download}
+                                  className="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                                >
+                                  {subItem.name}
+                                </a>
+                              ) : (
+                                <Link
+                                  to={subItem.href}
+                                  className="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                                >
+                                  {subItem.name}
+                                </Link>
+                              )}
+                            </React.Fragment>          <a
+                        href={item.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`${
+                          item.cta
+                            ? 'bg-orange-500 text-white px-6 py-2 rounded-full hover:bg-orange-600 transition-colors'
+                            : 'text-gray-700 hover:text-blue-600 transition-colors'
+                        }`}
+                      >
+                        {item.name}
+                      </a>
+                    ) : (
+                      <Link
+                        to={item.href}
+                        className={`${
+                          item.cta
+                            ? 'bg-orange-500 text-white px-6 py-2 rounded-full hover:bg-orange-600 transition-colors'
+                            : 'text-gray-700 hover:text-blue-600 transition-colors'
+                        }`}
+                      >
+                        {item.name}
+                      </Link>ce HeaderProps {
+  currentPage?: string;
+}
+
+const Header: React.FC<HeaderProps> = ({ currentPage = 'home' }) => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 50);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const toggleDropdown = (dropdown: string) => {
+    setOpenDropdown(openDropdown === dropdown ? null : dropdown);
+  };
+
+  const navItems = [
+    { name: 'Home', href: '/' },
+    { name: 'About Us', href: '/about' },
+    { name: 'Services', href: '/services' },
+    {
+      name: 'Downloads',
+      href: '#',
+      dropdown: [
+        { name: 'Account Opening Forms', href: '#', download: 'account-opening-forms.pdf' },
+        { name: 'KYC Documents', href: '#', download: 'kyc-documents.pdf' },
+        { name: 'Risk Disclosure Document', href: '#', download: 'risk-disclosure.pdf' },
+        { name: 'Rights & Obligations', href: '#', download: 'rights-obligations.pdf' },
+        { name: 'Tariff Sheet', href: '#', download: 'tariff-sheet.pdf' },
+        { name: 'Policies & Procedures', href: '#', download: 'policies-procedures.pdf' },
+        { name: 'Complaint Form', href: '#', download: 'complaint-form.pdf' },
+        { name: 'Closure Form', href: '#', download: 'closure-form.pdf' }
+      ]
+    },
+    {
+      name: 'Investor Charter',
+      href: '#',
+      dropdown: [
+        { name: 'Investor Charter - Depository', href: '/investor-charter' },
+        { name: 'SEBI Risk Disclosure', href: '/sebi-risk-disclosure' },
+        { name: 'Investor Charter Booking', href: '#', download: 'investor-charter-booking.pdf' },
+        { name: 'Investor Complaint', href: '#', download: 'investor-complaint.pdf' }
+      ]
+    },
+    { name: 'Bank Office', href: '/bank-office' },
+    {
+      name: 'Investor Section',
+      href: '#',
+      dropdown: [
+        { name: 'SEBI Risk Disclosure', href: '/sebi-risk-disclosure' },
+        { name: 'Most Important Terms & Conditions', href: '/mitc' },
+        { name: 'Important Circular of Clients', href: '/important-circular' },
+        { name: 'Freezing or Blocking of Trading Account', href: '/freezing-blocking' },
+        { name: 'Bank Details', href: '/bank-details' }
+      ]
+    },
+    { name: 'E-voting', href: 'https://www.evoting.nsdl.com/', external: true },
+    {
+      name: 'Contact',
+      href: '#',
+      dropdown: [
+        { name: 'Contact Us', href: '/contact' },
+        { name: 'AP Branch Details', href: '#', download: 'ap-branch-details.pdf' },
+        { name: 'KMP Details', href: '#', download: 'kmp-details.pdf' }
+      ]
+    },
+    { name: 'Open Account', href: '/open-account', cta: true }
+  ];
+
+  return (
+    <header className="fixed w-full z-50 bg-white shadow-lg transition-all duration-300">
+      {/* Top Contact Bar */}
+      <div className="bg-blue-900 text-white py-2 px-4">
+        <div className="container mx-auto flex justify-between items-center text-sm">
+          <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-2">
+              <Mail className="w-4 h-4" />
+              <span>info@moneycareindia.co.in</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Phone className="w-4 h-4" />
+              <span>+91-22-6234-5678</span>
+            </div>
+          </div>
+          <div className="flex items-center space-x-4">
+            <a href="#" className="hover:text-orange-400 transition-colors">Facebook</a>
+            <a href="#" className="hover:text-orange-400 transition-colors">Twitter</a>
+            <a href="#" className="hover:text-orange-400 transition-colors">LinkedIn</a>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Navigation */}
+      <nav className={`bg-white transition-all duration-300 ${isScrolled ? 'py-2' : 'py-4'}`}>
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between">
+            {/* Logo */}
+            <div className="flex items-center space-x-3">
+              <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-orange-500 rounded-full flex items-center justify-center">
+                <span className="text-white font-bold text-xl">M</span>
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-blue-900">Moneycare</h1>
+                <p className="text-sm text-gray-600">Caring for better tomorrow</p>
+              </div>
+            </div>
+
+            {/* Desktop Navigation */}
+            <div className="hidden lg:flex items-center space-x-8">
+              {navItems.map((item) => (
+                <div key={item.name} className="relative group">
+                  {item.dropdown ? (
+                    <div className="relative">
+                      <button
+                        onClick={() => toggleDropdown(item.name)}
+                        className="flex items-center space-x-1 text-gray-700 hover:text-blue-600 transition-colors py-2"
+                      >
+                        <span>{item.name}</span>
+                        <ChevronDown className="w-4 h-4" />
+                      </button>
+                      {openDropdown === item.name && (
+                        <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-lg shadow-xl border py-2 z-50">
+                          {item.dropdown.map((subItem) => 
+                            subItem.download ? (
+                              <a
+                                key={subItem.name}
+                                href={subItem.href}
+                                download={subItem.download}
+                                className="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                              >
+                                {subItem.name}
+                              </a>
+                            ) : (
+                              <Link
+                                key={subItem.name}
+                                to={subItem.href}
+                                className="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                              >
+                                {subItem.name}
+                              </Link>
+                            )
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <a
+                      href={item.href}
+                      target={item.external ? '_blank' : undefined}
+                      rel={item.external ? 'noopener noreferrer' : undefined}
+                      className={`${
+                        item.cta
+                          ? 'bg-orange-500 text-white px-6 py-2 rounded-full hover:bg-orange-600 transition-colors'
+                          : 'text-gray-700 hover:text-blue-600 transition-colors'
+                      }`}
+                    >
+                      {item.name}
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Mobile Menu Button */}
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="lg:hidden text-gray-700 hover:text-blue-600 transition-colors"
+            >
+              {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          </div>
+
+          {/* Mobile Navigation */}
+          {isMenuOpen && (
+            <div className="lg:hidden mt-4 pb-4 border-t">
+              <div className="flex flex-col space-y-2 pt-4">
+                {navItems.map((item) => (
+                  <div key={item.name}>
+                    {item.dropdown ? (
+                      <div>
+                        <button
+                          onClick={() => toggleDropdown(item.name)}
+                          className="flex items-center justify-between w-full text-left px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors rounded"
+                        >
+                          <span>{item.name}</span>
+                          <ChevronDown className={`w-4 h-4 transition-transform ${openDropdown === item.name ? 'rotate-180' : ''}`} />
+                        </button>
+                        {openDropdown === item.name && (
+                          <div className="ml-4 mt-2 space-y-1">
+                            {item.dropdown.map((subItem) => (
+                              <a
+                                key={subItem.name}
+                                href={subItem.href}
+                                download={subItem.download}
+                                className="block px-4 py-2 text-sm text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors rounded"
+                              >
+                                {subItem.name}
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <a
+                        href={item.href}
+                        target={item.external ? '_blank' : undefined}
+                        rel={item.external ? 'noopener noreferrer' : undefined}
+                        className={`block px-4 py-2 transition-colors rounded ${
+                          item.cta
+                            ? 'bg-orange-500 text-white hover:bg-orange-600 text-center mx-4'
+                            : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                        }`}
+                      >
+                        {item.name}
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </nav>
+    </header>
+  );
+};
+
+export default Header;

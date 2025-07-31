@@ -56,6 +56,62 @@ export interface OTPResponse {
   otp?: string; // For testing only
 }
 
+// File Management Types
+export interface FileCategory {
+  id: number;
+  name: string;
+  description: string;
+  icon: string;
+  isActive: boolean;
+  sortOrder: number;
+  createdDate: string;
+  modifiedDate: string;
+  createdBy: string;
+  modifiedBy: string;
+  documentCount: number;
+}
+
+export interface FileDocument {
+  id: number;
+  categoryId: number;
+  categoryName: string;
+  fileName: string;
+  displayName: string;
+  fileType: string;
+  fileSize: number;
+  description: string;
+  isActive: boolean;
+  uploadDate: string;
+  modifiedDate: string;
+  uploadedBy: string;
+  modifiedBy: string;
+  downloadCount: number;
+  lastDownloaded?: string;
+}
+
+export interface CategoryWithDocuments {
+  id: number;
+  name: string;
+  description: string;
+  icon: string;
+  isActive: boolean;
+  sortOrder: number;
+  documents: FileDocument[];
+}
+
+export interface FileDownloadHistory {
+  id: number;
+  documentId: number;
+  documentName: string;
+  categoryName: string;
+  userGuid: string;
+  userName: string;
+  userEmail: string;
+  downloadDate: string;
+  userIP: string;
+  userAgent: string;
+}
+
 class ApiService {
   private getAuthHeaders(): HeadersInit {
     const token = localStorage.getItem('token');
@@ -67,8 +123,29 @@ class ApiService {
 
   private async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ message: 'An error occurred' }));
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      let errorMessage = `HTTP ${response.status}`;
+      
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorData.error || errorMessage;
+      } catch {
+        const errorText = await response.text();
+        errorMessage = errorText || errorMessage;
+      }
+      
+      // Add specific error handling for common status codes
+      switch (response.status) {
+        case 401:
+          throw new Error('Unauthorized: Please log in again');
+        case 403:
+          throw new Error('Forbidden: You do not have permission to perform this action');
+        case 404:
+          throw new Error('Not found: The requested resource was not found');
+        case 500:
+          throw new Error('Server error: Please try again later');
+        default:
+          throw new Error(errorMessage);
+      }
     }
     return response.json();
   }
@@ -218,6 +295,7 @@ class ApiService {
 
   // OAuth endpoints
   getGoogleAuthUrl(): string {
+    // Use the backend endpoint that handles the OAuth flow properly
     return `${API_BASE_URL}/auth/google`;
   }
 
@@ -253,6 +331,209 @@ class ApiService {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<{ message: string }>(response);
+  }
+
+  // File Management API methods
+  async getAllCategories(): Promise<FileCategory[]> {
+    console.log('Making request to:', `${API_BASE_URL}/FileManagement/categories`);
+    try {
+      const response = await fetch(`${API_BASE_URL}/FileManagement/categories`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }, // Don't send auth headers for now
+      });
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+      return this.handleResponse<FileCategory[]>(response);
+    } catch (error) {
+      console.error('Error in getAllCategories:', error);
+      throw error;
+    }
+  }
+
+  async getCategoryById(id: number): Promise<FileCategory> {
+    const response = await fetch(`${API_BASE_URL}/FileManagement/categories/${id}`, {
+      method: 'GET',
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<FileCategory>(response);
+  }
+
+  async getCategoryWithDocuments(id: number): Promise<CategoryWithDocuments> {
+    const response = await fetch(`${API_BASE_URL}/FileManagement/categories/${id}/documents`, {
+      method: 'GET',
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<CategoryWithDocuments>(response);
+  }
+
+  async createCategory(category: {
+    name: string;
+    description: string;
+    icon: string;
+    sortOrder: number;
+  }): Promise<FileCategory> {
+    const response = await fetch(`${API_BASE_URL}/FileManagement/categories`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(category),
+    });
+    return this.handleResponse<FileCategory>(response);
+  }
+
+  async updateCategory(id: number, category: {
+    name: string;
+    description: string;
+    icon: string;
+    isActive: boolean;
+    sortOrder: number;
+  }): Promise<FileCategory> {
+    const response = await fetch(`${API_BASE_URL}/FileManagement/categories/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(category),
+    });
+    return this.handleResponse<FileCategory>(response);
+  }
+
+  async deleteCategory(id: number): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/FileManagement/categories/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to delete category with ID ${id}`);
+    }
+  }
+
+  async getAllDocuments(): Promise<{ category: FileCategory; documents: FileDocument[] }[]> {
+    console.log('Making request to:', `${API_BASE_URL}/FileManagement/documents`);
+    try {
+      const response = await fetch(`${API_BASE_URL}/FileManagement/documents`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }, // Don't send auth headers for now
+      });
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+      return this.handleResponse<{ category: FileCategory; documents: FileDocument[] }[]>(response);
+    } catch (error) {
+      console.error('Error in getAllDocuments:', error);
+      throw error;
+    }
+  }
+
+  async getDocumentsByCategory(categoryId: number): Promise<FileDocument[]> {
+    const response = await fetch(`${API_BASE_URL}/FileManagement/documents?categoryId=${categoryId}`, {
+      method: 'GET',
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<FileDocument[]>(response);
+  }
+
+  async getDocumentById(id: number): Promise<FileDocument> {
+    const response = await fetch(`${API_BASE_URL}/FileManagement/documents/${id}`, {
+      method: 'GET',
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<FileDocument>(response);
+  }
+
+  async uploadDocument(formData: FormData): Promise<FileDocument> {
+    const token = localStorage.getItem('token');
+    console.log('Upload Document - Token available:', !!token);
+    console.log('Upload Document - FormData contents:');
+    formData.forEach((value, key) => {
+      console.log(`${key}:`, value);
+    });
+    
+    const headers: HeadersInit = {
+      ...(token && { Authorization: `Bearer ${token}` }),
+    };
+    
+    console.log('Upload Document - Headers:', headers);
+    
+    // Don't set Content-Type for FormData - browser will set it automatically with boundary
+    const response = await fetch(`${API_BASE_URL}/FileManagement/documents`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    
+    console.log('Upload Document - Response status:', response.status);
+    console.log('Upload Document - Response headers:', response.headers);
+    
+    return this.handleResponse<FileDocument>(response);
+  }
+
+  async updateDocument(id: number, document: {
+    displayName: string;
+    description: string;
+    isActive: boolean;
+  }): Promise<FileDocument> {
+    const response = await fetch(`${API_BASE_URL}/FileManagement/documents/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(document),
+    });
+    return this.handleResponse<FileDocument>(response);
+  }
+
+  async deleteDocument(id: number): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/FileManagement/documents/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to delete document with ID ${id}`);
+    }
+  }
+
+  async downloadDocument(id: number): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/FileManagement/documents/${id}/download`, {
+      method: 'GET',
+      headers: this.getAuthHeaders(),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to download document with ID ${id}`);
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `document-${id}.pdf`); // You might want to get the actual filename
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  }
+
+  async getDownloadHistory(categoryId?: number, documentId?: number): Promise<FileDownloadHistory[]> {
+    const params = new URLSearchParams();
+    if (categoryId) params.append('categoryId', categoryId.toString());
+    if (documentId) params.append('documentId', documentId.toString());
+    
+    const response = await fetch(`${API_BASE_URL}/FileManagement/downloads/history?${params.toString()}`, {
+      method: 'GET',
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<FileDownloadHistory[]>(response);
+  }
+
+  async getUserDownloads(): Promise<FileDownloadHistory[]> {
+    const response = await fetch(`${API_BASE_URL}/FileManagement/downloads/user`, {
+      method: 'GET',
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<FileDownloadHistory[]>(response);
+  }
+
+  async getStatistics(): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/FileManagement/statistics`, {
+      method: 'GET',
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<any>(response);
   }
 }
 

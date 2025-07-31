@@ -33,7 +33,8 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
+    "start": "react-scripts start --https",
+    "start-http": "react-scripts start",
     "start-https": "react-scripts start --https",
     "build": "react-scripts build",
     "test": "react-scripts test",

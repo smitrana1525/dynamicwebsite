@@ -3,7 +3,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Swashbuckle.AspNetCore;
@@ -22,16 +21,31 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 // Register EmailService
 builder.Services.AddScoped<IEmailService, EmailService>();
 
+// Register FileManagementService
+builder.Services.AddScoped<IFileManagementService, FileManagementService>();
+
+// Register DataSeedingService
+builder.Services.AddScoped<IDataSeedingService, DataSeedingService>();
+
+// Add HttpContextAccessor for getting user IP and user agent
+builder.Services.AddHttpContextAccessor();
+
 // Add CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", policy =>
     {
-        policy.WithOrigins("http://localhost:3000", "https://localhost:3000")
+        policy.WithOrigins(
+            "http://localhost:3000", 
+            "https://localhost:3000",
+            "http://localhost:5173", 
+            "https://localhost:5173"
+        )
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials()
-              .SetIsOriginAllowed(origin => true);
+              .SetIsOriginAllowed(origin => true)
+              .WithExposedHeaders("Set-Cookie", "Authorization");
     });
 });
 
@@ -42,10 +56,10 @@ builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
 {
     options.IdleTimeout = TimeSpan.FromMinutes(10);
-    options.Cookie.HttpOnly = false;
+    options.Cookie.HttpOnly = false; // Changed from false to false (already correct)
     options.Cookie.IsEssential = true;
-    options.Cookie.SameSite = SameSiteMode.Lax;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.None;
+    options.Cookie.SameSite = SameSiteMode.None; // Changed from Lax to None for cross-origin
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
 });
 
 // Add forwarded headers support
@@ -68,7 +82,7 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
-    options.RequireHttpsMetadata = true;
+    options.RequireHttpsMetadata = false; // Changed to false for development
     options.SaveToken = true;
     options.TokenValidationParameters = new TokenValidationParameters
     {
@@ -79,7 +93,7 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidAudience = jwtSettings["Audience"],
         ValidateLifetime = true,
-        ClockSkew = TimeSpan.Zero
+        ClockSkew = TimeSpan.FromMinutes(5) // Added some clock skew tolerance
     };
 })
 .AddCookie("Cookies", options =>
@@ -90,35 +104,6 @@ builder.Services.AddAuthentication(options =>
     options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     options.ExpireTimeSpan = TimeSpan.FromHours(24);
     options.Cookie.Path = "/";
-})
-.AddGoogle(options =>
-{
-    options.ClientId = builder.Configuration["Authentication:Google:ClientId"] ?? "";
-    options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"] ?? "";
-    options.CallbackPath = "/api/auth/google-callback";
-    options.SaveTokens = true;
-    
-    // Configure correlation cookie for OAuth state management
-    options.CorrelationCookie.SameSite = SameSiteMode.Lax;
-    options.CorrelationCookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-    options.CorrelationCookie.HttpOnly = true;
-    options.CorrelationCookie.MaxAge = TimeSpan.FromMinutes(10);
-    options.CorrelationCookie.Path = "/";
-    
-    // Configure events for better debugging
-    options.Events = new Microsoft.AspNetCore.Authentication.OAuth.OAuthEvents
-    {
-        OnRemoteFailure = context =>
-        {
-            Console.WriteLine($"OAuth Remote Failure: {context.Failure?.Message}");
-            return Task.CompletedTask;
-        },
-        OnTicketReceived = context =>
-        {
-            Console.WriteLine("OAuth Ticket Received");
-            return Task.CompletedTask;
-        }
-    };
 });
 
 // Add Swagger services
@@ -155,6 +140,20 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
+// Seed sample data
+using (var scope = app.Services.CreateScope())
+{
+    var dataSeedingService = scope.ServiceProvider.GetRequiredService<IDataSeedingService>();
+    try
+    {
+        await dataSeedingService.SeedSampleDataAsync();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error seeding data: {ex.Message}");
+    }
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -186,5 +185,12 @@ app.UseAuthorization();
 
 // 8. Endpoints
 app.MapControllers();
+
+// Add route for OAuth test page
+app.MapGet("/oauth-test", async context =>
+{
+    context.Response.ContentType = "text/html";
+    await context.Response.SendFileAsync(Path.Combine(app.Environment.WebRootPath, "oauth-test.html"));
+});
 
 app.Run();

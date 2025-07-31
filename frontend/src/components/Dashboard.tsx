@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { apiService, User as ApiUser } from '../services/api';
+import { apiService, User as ApiUser, FileCategory, FileDocument, CategoryWithDocuments } from '../services/api';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import CategoryManagement from './CategoryManagement';
+import DocumentUpload from './DocumentUpload';
 import { 
   DollarSign, 
   TrendingUp, 
@@ -78,12 +80,13 @@ interface FileItem {
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('home');
+  const [downloadsSubTab, setDownloadsSubTab] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('all');
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -100,176 +103,12 @@ const Dashboard: React.FC = () => {
     bolsActive: true
   });
 
-  // Mock files data with categories
-  const [uploadedFiles, setUploadedFiles] = useState<FileItem[]>([
-    {
-      id: '1',
-      name: 'Individual CKYC Form.pdf',
-      size: '2.4 MB',
-      type: 'PDF',
-      uploadDate: new Date('2024-01-15'),
-      url: 'https://example.com/files/individual-ckyc-form.pdf',
-      category: 'Combine KYC Forms',
-      subcategory: 'Individual CKYC Form'
-    },
-    {
-      id: '2',
-      name: 'Non Individual CKYC Form.pdf',
-      size: '1.8 MB',
-      type: 'PDF',
-      uploadDate: new Date('2024-01-10'),
-      url: 'https://example.com/files/non-individual-ckyc-form.pdf',
-      category: 'Combine KYC Forms',
-      subcategory: 'Non Individual CKYC Form'
-    },
-    {
-      id: '3',
-      name: 'Rights and Obligation.pdf',
-      size: '3.2 MB',
-      type: 'PDF',
-      uploadDate: new Date('2024-01-05'),
-      url: 'https://example.com/files/rights-obligation.pdf',
-      category: 'Combine KYC Forms',
-      subcategory: 'Rights and Obligation'
-    },
-    {
-      id: '4',
-      name: 'Multiple Nomination.pdf',
-      size: '1.5 MB',
-      type: 'PDF',
-      uploadDate: new Date('2024-01-12'),
-      url: 'https://example.com/files/multiple-nomination.pdf',
-      category: 'Other Demat Form',
-      subcategory: 'Multiple Nomination'
-    },
-    {
-      id: '5',
-      name: 'Account Closure Form.pdf',
-      size: '2.1 MB',
-      type: 'PDF',
-      uploadDate: new Date('2024-01-08'),
-      url: 'https://example.com/files/account-closure-form.pdf',
-      category: 'Other Demat Form',
-      subcategory: 'Account Closure Form'
-    },
-    {
-      id: '6',
-      name: 'Granting of Exposure to Clients.pdf',
-      size: '4.2 MB',
-      type: 'PDF',
-      uploadDate: new Date('2024-01-03'),
-      url: 'https://example.com/files/granting-exposure-clients.pdf',
-      category: 'Policies',
-      subcategory: 'Granting of Exposure to Clients'
-    },
-    {
-      id: '7',
-      name: 'FATCA Form.pdf',
-      size: '1.9 MB',
-      type: 'PDF',
-      uploadDate: new Date('2024-01-20'),
-      url: 'https://example.com/files/fatca-form.pdf',
-      category: 'Other Forms',
-      subcategory: 'FATCA Form'
-    },
-    {
-      id: '8',
-      name: 'Important DP Circular.pdf',
-      size: '2.8 MB',
-      type: 'PDF',
-      uploadDate: new Date('2024-01-18'),
-      url: 'https://example.com/files/important-dp-circular.pdf',
-      category: 'Important Circulars',
-      subcategory: 'Important DP Circular'
-    }
-  ]);
-
-  // Categories data
-  const categories = [
-    {
-      id: 'kyc-forms',
-      name: 'Combine KYC Forms',
-      icon: FileCheck,
-      subcategories: [
-        'Individual CKYC Form',
-        'Non Individual CKYC Form',
-        'Rights and Obligation',
-        'Risk Disclosure Documents',
-        'Rights and Obligations for Trading A/c'
-      ]
-    },
-    {
-      id: 'demat-forms',
-      name: 'Other Demat Form',
-      icon: ClipboardList,
-      subcategories: [
-        'Multiple Nomination',
-        'Account Closure Form',
-        'Transposition Form',
-        'Transmission Form',
-        'Name Change Application',
-        'Signature Change Application',
-        'Email – Mobile Declaration',
-        'Permitted To Trade Data',
-        'Demat Tariff',
-        'List of Approved Securities'
-      ]
-    },
-    {
-      id: 'policies',
-      name: 'Policies',
-      icon: Shield,
-      subcategories: [
-        'Granting of Exposure to Clients',
-        'Policy on Handling of Good Till Cancelled (GTC) Orders',
-        'Combined Risk Management and Internal Control Policy',
-        'RMS Manual',
-        'PMLA Policy',
-        'Limit Setting',
-        'Policy of Inactive Accounts',
-        'Pre-funded Instruments',
-        'Code Modification Policy',
-        'Policy on Squaring Off Client Positions',
-        'Policy on Internal Shortage',
-        'Policy For Voluntary Blocking of The Trading Account',
-        'Policy of Outsourced Activities',
-        'Surveillance Policy'
-      ]
-    },
-    {
-      id: 'other-forms',
-      name: 'Other Forms',
-      icon: FileText,
-      subcategories: [
-        'FATCA Form',
-        'KRA Individual Form',
-        'KRA Non Individual Form',
-        'C-KYC Individual Form',
-        'C-KYC Non Individual Form',
-        'Important Exchange Circular',
-        'Important SEBI Circular'
-      ]
-    },
-    {
-      id: 'circulars',
-      name: 'Important Circulars',
-      icon: Bell,
-      subcategories: [
-        'Important DP Circular',
-        'Important Exchange Circular',
-        'Important SEBI Circular',
-        'New Status and Sub-Status for Demat Accounts',
-        'Additional Criteria for Dormant Demat Accounts',
-        'Validation of KYC Records with KRA',
-        'SEBI Master CIR on Surveillance of Securities Market',
-        'SEBI CIR on KYC Upload by Registration Agencies to Central KYC Registry',
-        'Implementation of Two-Factor Authentication in EASI & EASIEST Login',
-        'Review of KYC Validation',
-        'Aadhaar Seeding (Linkage of PAN with Aadhaar)',
-        'SCORES 2.0 – SEBI Complaint Redressal System for Investors'
-      ]
-    }
-  ];
+  // File management state
+  const [categories, setCategories] = useState<FileCategory[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<CategoryWithDocuments | null>(null);
+  const [documents, setDocuments] = useState<FileDocument[]>([]);
+  const [loadingFiles, setLoadingFiles] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
 
   // Update time every second
   useEffect(() => {
@@ -279,6 +118,155 @@ const Dashboard: React.FC = () => {
 
     return () => clearInterval(timer);
   }, []);
+
+  // Load categories on component mount
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  const loadCategories = async () => {
+    try {
+      setLoadingFiles(true);
+      setFileError(null);
+      console.log('Loading categories...');
+      console.log('User:', user);
+      console.log('Token:', localStorage.getItem('token'));
+      
+      const categoriesData = await apiService.getAllCategories();
+      console.log('Categories loaded:', categoriesData);
+      setCategories(categoriesData);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+      setFileError(`Failed to load categories: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+      // Fallback to mock data for testing
+      const mockCategories: FileCategory[] = [
+        {
+          id: 1,
+          name: 'Combine KYC Forms',
+          description: 'All KYC related forms and documents for customer verification',
+          icon: 'FileCheck',
+          isActive: true,
+          sortOrder: 1,
+          createdDate: new Date().toISOString(),
+          modifiedDate: new Date().toISOString(),
+          createdBy: 'mock-user',
+          modifiedBy: 'mock-user',
+          documentCount: 3
+        },
+        {
+          id: 2,
+          name: 'Other Demat Form',
+          description: 'Various demat account related forms and applications',
+          icon: 'ClipboardList',
+          isActive: true,
+          sortOrder: 2,
+          createdDate: new Date().toISOString(),
+          modifiedDate: new Date().toISOString(),
+          createdBy: 'mock-user',
+          modifiedBy: 'mock-user',
+          documentCount: 2
+        },
+        {
+          id: 3,
+          name: 'Policies',
+          description: 'Company policies and procedures documents',
+          icon: 'Shield',
+          isActive: true,
+          sortOrder: 3,
+          createdDate: new Date().toISOString(),
+          modifiedDate: new Date().toISOString(),
+          createdBy: 'mock-user',
+          modifiedBy: 'mock-user',
+          documentCount: 1
+        }
+      ];
+      setCategories(mockCategories);
+    } finally {
+      setLoadingFiles(false);
+    }
+  };
+
+  const loadCategoryDocuments = async (categoryId: number) => {
+    try {
+      setLoadingFiles(true);
+      setFileError(null);
+      console.log('Loading documents for category:', categoryId);
+      
+      const categoryData = await apiService.getCategoryWithDocuments(categoryId);
+      console.log('Category data loaded:', categoryData);
+      setSelectedCategory(categoryData);
+      setDocuments(categoryData.documents);
+    } catch (error) {
+      console.error('Error loading documents:', error);
+      setFileError(`Failed to load documents: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+      // Fallback to mock data for testing
+      const mockDocuments: FileDocument[] = [
+        {
+          id: 1,
+          categoryId: categoryId,
+          categoryName: 'Sample Category',
+          fileName: 'sample-document.pdf',
+          displayName: 'Sample Document',
+          fileType: '.pdf',
+          fileSize: 1024000,
+          description: 'This is a sample document for testing',
+          isActive: true,
+          uploadDate: new Date().toISOString(),
+          modifiedDate: new Date().toISOString(),
+          uploadedBy: 'mock-user',
+          modifiedBy: 'mock-user',
+          downloadCount: 5
+        },
+        {
+          id: 2,
+          categoryId: categoryId,
+          categoryName: 'Sample Category',
+          fileName: 'another-document.pdf',
+          displayName: 'Another Document',
+          fileType: '.pdf',
+          fileSize: 2048000,
+          description: 'Another sample document for testing',
+          isActive: true,
+          uploadDate: new Date().toISOString(),
+          modifiedDate: new Date().toISOString(),
+          uploadedBy: 'mock-user',
+          modifiedBy: 'mock-user',
+          downloadCount: 3
+        }
+      ];
+      
+      const mockCategoryData: CategoryWithDocuments = {
+        id: categoryId,
+        name: 'Sample Category',
+        description: 'Sample category for testing',
+        icon: 'FileCheck',
+        isActive: true,
+        sortOrder: 1,
+        documents: mockDocuments
+      };
+      
+      setSelectedCategory(mockCategoryData);
+      setDocuments(mockDocuments);
+    } finally {
+      setLoadingFiles(false);
+    }
+  };
+
+  const handleDocumentDownload = async (documentId: number) => {
+    try {
+      console.log('Downloading document:', documentId);
+      await apiService.downloadDocument(documentId);
+    } catch (error) {
+      console.error('Error downloading document:', error);
+      alert('Failed to download document');
+      
+      // Mock download for testing
+      console.log('Mock download for document:', documentId);
+      alert('Mock download completed for document: ' + documentId);
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -361,23 +349,18 @@ const Dashboard: React.FC = () => {
 
 
 
-  const handleFileAction = (action: string, file: FileItem) => {
+  const handleFileAction = (action: string, document: FileDocument) => {
     switch (action) {
       case 'view':
-        if (file.url) {
-          window.open(file.url, '_blank');
-        }
+        // For now, just download the file
+        handleDocumentDownload(document.id);
         break;
       case 'download':
-        if (file.url) {
-          const link = document.createElement('a');
-          link.href = file.url;
-          link.download = file.name;
-          link.click();
-        }
+        handleDocumentDownload(document.id);
         break;
       case 'delete':
-        setUploadedFiles(uploadedFiles.filter(f => f.id !== file.id));
+        // This would require admin privileges
+        console.log('Delete action not implemented for users');
         break;
     }
   };
@@ -417,23 +400,28 @@ const Dashboard: React.FC = () => {
     });
   };
 
-  const filteredFiles = uploadedFiles.filter(file => {
-    const matchesSearch = file.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         file.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         file.subcategory.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || file.category === selectedCategory;
+  const filteredDocuments = documents.filter(document => {
+    const matchesSearch = document.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         document.categoryName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (document.description && document.description.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesCategory = selectedCategoryFilter === 'all' || document.categoryId.toString() === selectedCategoryFilter;
     return matchesSearch && matchesCategory;
   });
 
   const sidebarItems = [
     { id: 'home', label: 'Home', icon: Home },
-    { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'downloads', label: 'Downloads', icon: Download },
     { id: 'files', label: 'Files', icon: FolderOpen },
     { id: 'analytics', label: 'Analytics', icon: PieChart },
     { id: 'goals', label: 'Goals', icon: Target },
     { id: 'calendar', label: 'Calendar', icon: Calendar },
     { id: 'settings', label: 'Settings', icon: Settings },
+  ];
+
+  const downloadsSubItems = [
+    { id: 'browse', label: 'Browse Files', icon: FileText },
+    { id: 'categories', label: 'Create Categories', icon: Plus },
+    { id: 'upload', label: 'Upload Documents', icon: Upload },
   ];
 
   const renderHome = () => (
@@ -554,13 +542,22 @@ const Dashboard: React.FC = () => {
             </div>
             <div className="sm:w-48">
               <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
+                value={selectedCategoryFilter}
+                onChange={(e) => {
+                  if (e.target.value === 'all') {
+                    setSelectedCategoryFilter('all');
+                    setSelectedCategory(null);
+                    setDocuments([]);
+                  } else {
+                    setSelectedCategoryFilter(e.target.value);
+                    loadCategoryDocuments(parseInt(e.target.value));
+                  }
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">All Categories</option>
                 {categories.map(category => (
-                  <option key={category.id} value={category.name}>{category.name}</option>
+                  <option key={category.id} value={category.id.toString()}>{category.name}</option>
                 ))}
               </select>
             </div>
@@ -568,98 +565,168 @@ const Dashboard: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Categories Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {categories.map((category) => {
-          const Icon = category.icon;
-          const categoryFiles = uploadedFiles.filter(file => file.category === category.name);
-          
-          return (
-            <Card key={category.id} className="hover:shadow-lg transition-shadow cursor-pointer">
-              <CardHeader>
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <Icon className="h-5 w-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg">{category.name}</CardTitle>
-                    <CardDescription>{categoryFiles.length} files</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {category.subcategories.slice(0, 3).map((subcategory, index) => (
-                    <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                      <span className="text-sm text-gray-700">{subcategory}</span>
-                      <Button variant="ghost" size="sm">
-                        <Download className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ))}
-                  {category.subcategories.length > 3 && (
-                    <div className="text-center pt-2">
-                      <Button variant="outline" size="sm">
-                        View All ({category.subcategories.length})
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      {/* Loading State */}
+      {loadingFiles && (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-2 text-gray-600">Loading files...</p>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Files List */}
-      {filteredFiles.length > 0 && (
+      {/* Error State */}
+      {fileError && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-red-600">{fileError}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Categories Grid */}
+      {!loadingFiles && !fileError && categories.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {categories.map((category) => {
+            // Map icon names to actual icon components
+            const getIconComponent = (iconName: string) => {
+              switch (iconName) {
+                case 'FileCheck':
+                  return <FileCheck className="h-5 w-5 text-blue-600" />;
+                case 'ClipboardList':
+                  return <ClipboardList className="h-5 w-5 text-green-600" />;
+                case 'Shield':
+                  return <Shield className="h-5 w-5 text-purple-600" />;
+                case 'FileText':
+                  return <FileText className="h-5 w-5 text-orange-600" />;
+                case 'Bell':
+                  return <Bell className="h-5 w-5 text-red-600" />;
+                default:
+                  return <FileCheck className="h-5 w-5 text-blue-600" />;
+              }
+            };
+
+            return (
+              <Card 
+                key={category.id} 
+                className="hover:shadow-lg transition-shadow cursor-pointer"
+                onClick={() => loadCategoryDocuments(category.id)}
+              >
+                <CardHeader>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                      {getIconComponent(category.icon)}
+                    </div>
+                                         <div>
+                       <CardTitle className="text-lg">{category.name}</CardTitle>
+                       <CardDescription>{category.documentCount} files • Sort: {category.sortOrder}</CardDescription>
+                     </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-gray-600">{category.description}</p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* No Categories State */}
+      {!loadingFiles && !fileError && categories.length === 0 && (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <FileCheck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600">No categories found</p>
+            <p className="text-sm text-gray-400 mt-2">Categories will appear here once they are created</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Documents List */}
+      {selectedCategory && documents.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>All Files ({filteredFiles.length})</CardTitle>
-            <CardDescription>
-              Browse and download all available files
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>{selectedCategory.name} Documents ({documents.length})</CardTitle>
+                <CardDescription>
+                  Browse and download all available files in this category
+                </CardDescription>
+              </div>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setSelectedCategory(null);
+                  setDocuments([]);
+                  setSelectedCategoryFilter('all');
+                }}
+              >
+                <ChevronLeft className="h-4 w-4 mr-2" />
+                Back to Categories
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {filteredFiles.map((file) => (
-                <div key={file.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              {documents.map((document) => (
+                <div key={document.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                   <div className="flex items-center space-x-4">
                     <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                       <FileText className="h-6 w-6 text-blue-600" />
                     </div>
                     <div>
-                      <p className="font-medium">{file.name}</p>
+                      <p className="font-medium">{document.displayName}</p>
                       <p className="text-sm text-gray-500">
-                        {file.category} • {file.subcategory} • {file.size} • {file.uploadDate.toLocaleDateString()}
+                        {document.categoryName} • {document.fileType.toUpperCase()} • 
+                        {(document.fileSize / 1024 / 1024).toFixed(2)} MB • 
+                        {new Date(document.uploadDate).toLocaleDateString()}
                       </p>
+                      {document.description && (
+                        <p className="text-sm text-gray-400 mt-1">{document.description}</p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleFileAction('view', file)}
+                      onClick={() => handleDocumentDownload(document.id)}
                     >
-                      <Eye className="h-4 w-4" />
+                      <Download className="h-4 w-4 mr-2" />
+                      Download
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleFileAction('download', file)}
-                    >
-                      <Download className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
+                    <div className="text-sm text-gray-500">
+                      {document.downloadCount} downloads
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* No Documents State */}
+      {selectedCategory && documents.length === 0 && !loadingFiles && (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600">No documents found in this category</p>
+            <Button 
+              variant="outline" 
+              className="mt-4"
+              onClick={() => {
+                setSelectedCategory(null);
+                setDocuments([]);
+                setSelectedCategoryFilter('all');
+              }}
+            >
+              <ChevronLeft className="h-4 w-4 mr-2" />
+              Back to Categories
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -844,9 +911,16 @@ const Dashboard: React.FC = () => {
       case 'home':
         return renderHome();
       case 'downloads':
-        return renderDownloads();
-      case 'overview':
-        return renderOverview();
+        switch (downloadsSubTab) {
+          case 'browse':
+            return renderDownloads();
+          case 'categories':
+            return <CategoryManagement />;
+          case 'upload':
+            return <DocumentUpload />;
+          default:
+            return renderDownloads();
+        }
       case 'files':
         return renderFiles();
       case 'analytics':
@@ -858,117 +932,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // Keep existing render methods for other tabs
-  const renderOverview = () => (
-    <div className="space-y-6">
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Portfolio Value</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₹2,45,000</div>
-            <p className="text-xs text-muted-foreground">
-              +2.1% from last month
-            </p>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Monthly Investment</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">₹82,000</div>
-            <p className="text-xs text-muted-foreground">
-              +12% from last month
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Returns</CardTitle>
-            <TrendingUp className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">₹44,000</div>
-            <p className="text-xs text-muted-foreground">
-              +8% from last month
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Demat A/c</CardTitle>
-            <CreditCard className="h-4 w-4 text-purple-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-600">3</div>
-            <p className="text-xs text-muted-foreground">
-              All accounts active
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recent Transactions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Transactions</CardTitle>
-          <CardDescription>
-            Your latest financial activities
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                  <TrendingUp className="h-5 w-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="font-medium">SIP Investment</p>
-                  <p className="text-sm text-gray-500">Today</p>
-                </div>
-              </div>
-              <span className="font-bold text-green-600">+₹5,000</span>
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                  <TrendingUp className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="font-medium">Dividend Received</p>
-                  <p className="text-sm text-gray-500">Yesterday</p>
-                </div>
-              </div>
-              <span className="font-bold text-blue-600">+₹1,200</span>
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                  <CreditCard className="h-5 w-5 text-purple-600" />
-                </div>
-                <div>
-                  <p className="font-medium">Demat Account Fee</p>
-                  <p className="text-sm text-gray-500">2 days ago</p>
-                </div>
-              </div>
-              <span className="font-bold text-red-600">-₹500</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
 
   const renderFiles = () => (
     <div className="space-y-6">
@@ -1066,12 +1030,22 @@ const Dashboard: React.FC = () => {
               <ul className="space-y-2">
                 {sidebarItems.map((item) => {
                   const Icon = item.icon;
+                  const isDownloads = item.id === 'downloads';
+                  const isActive = activeTab === item.id;
+                  
                   return (
                     <li key={item.id}>
                       <button
-                        onClick={() => setActiveTab(item.id)}
+                        onClick={() => {
+                          setActiveTab(item.id);
+                          if (isDownloads) {
+                            setDownloadsSubTab('browse');
+                          } else {
+                            setDownloadsSubTab(null);
+                          }
+                        }}
                         className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
-                          activeTab === item.id
+                          isActive
                             ? 'bg-blue-100 text-blue-700'
                             : 'text-gray-600 hover:bg-gray-100'
                         }`}
@@ -1080,6 +1054,30 @@ const Dashboard: React.FC = () => {
                         <Icon className="h-5 w-5 flex-shrink-0" />
                         {!sidebarCollapsed && <span>{item.label}</span>}
                       </button>
+                      
+                      {/* Downloads Sub-navigation */}
+                      {isDownloads && isActive && !sidebarCollapsed && (
+                        <ul className="ml-6 mt-2 space-y-1">
+                          {downloadsSubItems.map((subItem) => {
+                            const SubIcon = subItem.icon;
+                            return (
+                              <li key={subItem.id}>
+                                <button
+                                  onClick={() => setDownloadsSubTab(subItem.id)}
+                                  className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                                    downloadsSubTab === subItem.id
+                                      ? 'bg-blue-50 text-blue-600 border-l-2 border-blue-600'
+                                      : 'text-gray-500 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <SubIcon className="h-4 w-4 flex-shrink-0" />
+                                  <span>{subItem.label}</span>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
                     </li>
                   );
                 })}
@@ -1109,7 +1107,10 @@ const Dashboard: React.FC = () => {
               <div className="flex justify-between items-center">
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">
-                    {sidebarItems.find(item => item.id === activeTab)?.label}
+                    {activeTab === 'downloads' && downloadsSubTab 
+                      ? downloadsSubItems.find(item => item.id === downloadsSubTab)?.label
+                      : sidebarItems.find(item => item.id === activeTab)?.label
+                    }
                   </h2>
                   <p className="text-gray-600">
                     Welcome back, {user?.strName ? getFirstName(user.strName) : 'User'}!

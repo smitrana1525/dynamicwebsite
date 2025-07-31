@@ -15,7 +15,7 @@ const OAuthCallback: React.FC = () => {
       try {
         clearError();
         
-        // Get URL parameters
+        // Check if we're returning from OAuth
         const urlParams = new URLSearchParams(window.location.search);
         const token = urlParams.get('token');
         const provider = urlParams.get('provider');
@@ -41,9 +41,9 @@ const OAuthCallback: React.FC = () => {
         try {
           const tokenPayload = JSON.parse(atob(token.split('.')[1]));
           const user = {
-            strGUID: tokenPayload.UserId || '',
-            strName: tokenPayload.Name || 'User',
-            strEmailId: tokenPayload.Email || '',
+            strGUID: tokenPayload.UserId || tokenPayload.nameid || '',
+            strName: tokenPayload.Name || tokenPayload.name || 'User',
+            strEmailId: tokenPayload.Email || tokenPayload.email || '',
             bolsActive: true,
             createDate: new Date().toISOString(),
             ModifyDate: new Date().toISOString(),

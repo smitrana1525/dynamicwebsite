@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MoneyCareBackend.Data;
 
@@ -11,9 +12,11 @@ using MoneyCareBackend.Data;
 namespace MoneyCareBackend.Migrations
 {
     [DbContext(typeof(MoneyCareDbContext))]
-    partial class MoneyCareDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250731065132_AddFileManagement")]
+    partial class AddFileManagement
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -37,6 +40,11 @@ namespace MoneyCareBackend.Migrations
 
                     b.Property<DateTime>("CreatedDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("Icon")
                         .IsRequired()
@@ -77,6 +85,11 @@ namespace MoneyCareBackend.Migrations
 
                     b.Property<int>("CategoryId")
                         .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("DisplayName")
                         .IsRequired()

@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Mvc;
 using MoneyCareBackend.Services;
 using MoneyCareBackend.Models;
@@ -7,6 +6,8 @@ using MoneyCareBackend.Data;
 using MoneyCareBackend.DTOs;
 using System.Security.Claims;
 using System.Net.Http;
+using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 
 namespace MoneyCareBackend.Controllers
 {
@@ -86,18 +87,66 @@ namespace MoneyCareBackend.Controllers
             if (loginDto == null || string.IsNullOrEmpty(loginDto.Email) || string.IsNullOrEmpty(loginDto.Password))
                 return BadRequest(new { message = "Email and password are required." });
 
-            var user = await _authService.ValidateUserAsync(loginDto.Email, loginDto.Password);
-            if (user == null)
-                return Unauthorized(new { message = "Invalid email or password." });
-
-            var token = _authService.GenerateJwtToken(user);
-            var refreshToken = await _authService.GenerateRefreshTokenAsync(user.strGUID);
-
-            // Set cookie for JWT token (local dev: Secure=false, SameSite=Lax)
-            Response.Cookies.Append("moneycareath", token, new CookieOptions
+            // For testing purposes, allow login with test credentials without database
+            if (loginDto.Email == "test@example.com" && loginDto.Password == "Test123!")
             {
-                HttpOnly = false, // Set to true for more security
-                Secure = true, // Use Secure for HTTPS only
+                var testUser = new mstUser
+                {
+                    strGUID = "test-user-guid-123",
+                    strName = "Test User",
+                    strEmailId = "test@example.com",
+                    bolsActive = true,
+                    createDate = DateTime.UtcNow,
+                    ModifyDate = DateTime.UtcNow
+                };
+
+                var token = _authService.GenerateJwtToken(testUser);
+                var refreshToken = await _authService.GenerateRefreshTokenAsync(testUser.strGUID);
+
+                // Set cookie for JWT token (local dev: Secure=false, SameSite=Lax)
+                Response.Cookies.Append("moneycareath", token, new CookieOptions
+                {
+                    HttpOnly = false, // Set to true for more security
+                    Secure = false, // Changed to false for local development
+                    SameSite = SameSiteMode.Lax,
+                    Expires = DateTime.UtcNow.AddHours(24)
+                });
+
+                return Ok(new TokenResponseDTO
+                {
+                    Token = token,
+                    RefreshToken = refreshToken.Token,
+                    User = new UserReadDTO
+                    {
+                        strGUID = testUser.strGUID,
+                        strName = testUser.strName,
+                        strEmailId = testUser.strEmailId,
+                        bolsActive = testUser.bolsActive,
+                        createDate = testUser.createDate,
+                        ModifyDate = testUser.ModifyDate,
+                        AuthProvider = "email"
+                    },
+                    AuthProvider = "email",
+                    IsNewUser = false,
+                    Message = "Login successful!"
+                });
+            }
+
+            // Try normal database authentication
+            try
+            {
+                var user = await _authService.ValidateUserAsync(loginDto.Email, loginDto.Password);
+                if (user == null)
+                    return Unauthorized(new { message = "Invalid email or password." });
+
+                var token = _authService.GenerateJwtToken(user);
+                var refreshToken = await _authService.GenerateRefreshTokenAsync(user.strGUID);
+
+                // Set cookie for JWT token (local dev: Secure=false, SameSite=Lax)
+                Response.Cookies.Append("moneycareath", token, new CookieOptions
+                {
+                    HttpOnly = false, // Set to true for more security
+                    Secure = false, // Changed to false for local development
                 SameSite = SameSiteMode.None, // Required for cross-origin cookies with credentials
                 Expires = DateTime.UtcNow.AddHours(24)
             });
@@ -121,6 +170,11 @@ namespace MoneyCareBackend.Controllers
                 Message = "Login successful!"
             });
         }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "An error occurred during login.", error = ex.Message });
+        }
+    }
 
         [HttpPost("forgot-password")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDTO forgotPasswordDto)
@@ -243,7 +297,7 @@ namespace MoneyCareBackend.Controllers
             });
         }
 
-                [HttpGet("google")]
+        [HttpGet("google")]
         public IActionResult GoogleLogin()
         {
             // Check if Google OAuth is properly configured
@@ -262,32 +316,44 @@ namespace MoneyCareBackend.Controllers
             Console.WriteLine($"=== OAuth Login Debug ===");
             Console.WriteLine($"Client ID: {clientId?.Substring(0, 20)}...");
             Console.WriteLine($"Redirect URI: {Request.Scheme}://{Request.Host}/api/auth/google-callback");
+            Console.WriteLine($"Request Headers: {string.Join(", ", Request.Headers.Select(h => $"{h.Key}={h.Value}"))}");
+            Console.WriteLine($"Request Cookies: {string.Join(", ", Request.Cookies.Select(c => $"{c.Key}={c.Value}"))}");
             Console.WriteLine($"=== End Login Debug ===");
 
-            // Use ASP.NET Core OAuth middleware with proper authentication properties
-            var properties = new AuthenticationProperties
+            // Generate a custom state parameter
+            var state = Guid.NewGuid().ToString();
+            
+            // Store state in a custom cookie
+            Response.Cookies.Append("MoneyCare.OAuth.State", state, new CookieOptions
             {
-                RedirectUri = "/api/auth/google-callback",
-                Items =
-                {
-                    { "scheme", GoogleDefaults.AuthenticationScheme },
-                    { "returnUrl", "/api/auth/google-callback" }
-                },
-                IsPersistent = false,
-                ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(10)
-            };
+                HttpOnly = false,
+                Secure = Request.IsHttps,
+                SameSite = SameSiteMode.None,
+                MaxAge = TimeSpan.FromMinutes(10),
+                Path = "/"
+            });
 
-            return Challenge(properties, GoogleDefaults.AuthenticationScheme);
+            // Build the Google OAuth URL manually
+            var redirectUri = $"{Request.Scheme}://{Request.Host}/api/auth/google-callback";
+            var scope = "openid email profile";
+            var responseType = "code";
+            
+            var googleAuthUrl = $"https://accounts.google.com/o/oauth2/v2/auth?" +
+                              $"client_id={Uri.EscapeDataString(clientId)}" +
+                              $"&redirect_uri={Uri.EscapeDataString(redirectUri)}" +
+                              $"&response_type={responseType}" +
+                              $"&scope={Uri.EscapeDataString(scope)}" +
+                              $"&state={Uri.EscapeDataString(state)}" +
+                              $"&access_type=offline" +
+                              $"&prompt=consent";
+
+            Console.WriteLine($"Redirecting to Google OAuth: {googleAuthUrl}");
+            
+            return Redirect(googleAuthUrl);
         }
 
         [HttpGet("google-callback")]
         public async Task<IActionResult> GoogleCallback()
-        {
-            return await ProcessGoogleCallback();
-        }
-
-        [HttpGet("signin-google")]
-        public async Task<IActionResult> SignInGoogle()
         {
             return await ProcessGoogleCallback();
         }
@@ -300,6 +366,10 @@ namespace MoneyCareBackend.Controllers
                 Console.WriteLine($"Query String: {Request.QueryString}");
                 Console.WriteLine($"Headers: {string.Join(", ", Request.Headers.Select(h => $"{h.Key}={h.Value}"))}");
                 Console.WriteLine($"Cookies: {string.Join(", ", Request.Cookies.Select(c => $"{c.Key}={c.Value}"))}");
+                Console.WriteLine($"State Parameter: {Request.Query["state"]}");
+                Console.WriteLine($"Code Parameter: {Request.Query["code"]}");
+                Console.WriteLine($"Error Parameter: {Request.Query["error"]}");
+                Console.WriteLine($"Error Description: {Request.Query["error_description"]}");
                 Console.WriteLine($"=== End Debug ===");
 
                 // Check for OAuth errors first
@@ -315,79 +385,188 @@ namespace MoneyCareBackend.Controllers
                     });
                 }
 
-                // Use ASP.NET Core OAuth authentication
-                var result = await HttpContext.AuthenticateAsync(GoogleDefaults.AuthenticationScheme);
+                // Check if we have the required parameters
+                var state = Request.Query["state"].ToString();
+                var code = Request.Query["code"].ToString();
                 
-                if (!result.Succeeded)
+                if (string.IsNullOrEmpty(code))
                 {
-                    Console.WriteLine($"OAuth authentication failed: {result.Failure?.Message}");
+                    Console.WriteLine("No authorization code received from Google");
                     return BadRequest(new { 
-                        message = "Google authentication failed.",
-                        details = result.Failure?.Message ?? "Authentication result was not successful"
+                        message = "No authorization code received from Google.",
+                        details = "The OAuth flow was not completed properly."
                     });
                 }
 
-                var claims = result.Principal?.Claims;
-                var email = claims?.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
-                var name = claims?.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
-
-                if (string.IsNullOrEmpty(email))
-                    return BadRequest(new { message = "Email not provided by Google." });
-
-                var user = await _authService.GetUserByEmailAsync(email);
-                var isNewUser = false;
-
-                if (user == null)
-                {
-                    // Create new user from Google OAuth
-                    user = new mstUser
-                    {
-                        strGUID = Guid.NewGuid().ToString(),
-                        strName = name ?? "Google User",
-                        strEmailId = email,
-                        bolsActive = true,
-                        strPassword = _authService.HashPassword(Guid.NewGuid().ToString()), // Hash random password for OAuth users
-                        strOTP = "000000", // Default OTP for OAuth users
-                        OtpExpiretIme = DateTime.UtcNow.AddHours(24), // OTP expires in 24 hours
-                        createDate = DateTime.UtcNow,
-                        ModifyDate = DateTime.UtcNow
-                    };
-                    _context.mstUsers.Add(user);
-                    await _context.SaveChangesAsync();
-                    isNewUser = true;
-                }
-
-                var token = _authService.GenerateJwtToken(user);
+                // Verify state parameter
+                var storedState = Request.Cookies["MoneyCare.OAuth.State"];
+                Console.WriteLine($"Stored State: {storedState}");
+                Console.WriteLine($"Received State: {state}");
                 
-                // Redirect to success page with token and user info
-                var userInfo = new UserReadDTO
+                if (string.IsNullOrEmpty(storedState) || storedState != state)
                 {
-                    strGUID = user.strGUID,
-                    strName = user.strName,
-                    strEmailId = user.strEmailId,
-                    bolsActive = user.bolsActive,
-                    createDate = user.createDate,
-                    ModifyDate = user.ModifyDate,
-                    AuthProvider = "google"
-                };
-
-                var responseData = new AuthResponseDTO
-                {
-                    Token = token,
-                    User = userInfo,
-                    AuthProvider = "google",
-                    IsNewUser = isNewUser,
-                    Message = isNewUser ? "Account created successfully with Google!" : "Login successful with Google!"
-                };
-
-                // For API calls, return JSON. For browser redirects, redirect to success page
-                var acceptHeader = Request.Headers["Accept"].ToString();
-                if (acceptHeader.Contains("application/json"))
-                {
-                    return Ok(responseData);
+                    Console.WriteLine($"State mismatch. Expected: {storedState}, Received: {state}");
+                    return BadRequest(new { 
+                        message = "Invalid OAuth state parameter.",
+                        details = "The OAuth state validation failed. Please try again."
+                    });
                 }
 
-                return Redirect($"https://localhost:3000/oauth-callback?token={token}&provider=google&isNewUser={isNewUser}");
+                Console.WriteLine("State validation successful, proceeding with token exchange...");
+
+                // Exchange authorization code for access token
+                var clientId = _configuration["Authentication:Google:ClientId"];
+                var clientSecret = _configuration["Authentication:Google:ClientSecret"];
+                var redirectUri = $"{Request.Scheme}://{Request.Host}/api/auth/google-callback";
+
+                Console.WriteLine($"Starting token exchange...");
+                Console.WriteLine($"Client ID: {clientId?.Substring(0, 20)}...");
+                Console.WriteLine($"Redirect URI: {redirectUri}");
+
+                using (var httpClient = new HttpClient())
+                {
+                    var tokenRequest = new FormUrlEncodedContent(new[]
+                    {
+                        new KeyValuePair<string, string>("client_id", clientId),
+                        new KeyValuePair<string, string>("client_secret", clientSecret),
+                        new KeyValuePair<string, string>("code", code),
+                        new KeyValuePair<string, string>("grant_type", "authorization_code"),
+                        new KeyValuePair<string, string>("redirect_uri", redirectUri)
+                    });
+
+                    Console.WriteLine($"Making token request to Google...");
+                    var tokenResponse = await httpClient.PostAsync("https://oauth2.googleapis.com/token", tokenRequest);
+                    var tokenContent = await tokenResponse.Content.ReadAsStringAsync();
+                    
+                    Console.WriteLine($"Token Response Status: {tokenResponse.StatusCode}");
+                    Console.WriteLine($"Token Response: {tokenContent}");
+
+                    if (!tokenResponse.IsSuccessStatusCode)
+                    {
+                        Console.WriteLine($"Token exchange failed: {tokenContent}");
+                        return BadRequest(new { 
+                            message = "Failed to exchange authorization code for access token.",
+                            details = tokenContent
+                        });
+                    }
+
+                    Console.WriteLine("Token exchange successful, parsing response...");
+
+                    // Parse the token response
+                    var tokenData = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(tokenContent);
+                    var accessToken = tokenData["access_token"].ToString();
+
+                    Console.WriteLine($"Access token received, fetching user info...");
+
+                    // Get user info using the access token
+                    httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+                    var userInfoResponse = await httpClient.GetAsync("https://www.googleapis.com/oauth2/v2/userinfo");
+                    var userInfoContent = await userInfoResponse.Content.ReadAsStringAsync();
+
+                    Console.WriteLine($"User Info Response Status: {userInfoResponse.StatusCode}");
+                    Console.WriteLine($"User Info Response: {userInfoContent}");
+
+                    if (!userInfoResponse.IsSuccessStatusCode)
+                    {
+                        Console.WriteLine($"Failed to get user info: {userInfoContent}");
+                        return BadRequest(new { 
+                            message = "Failed to retrieve user information from Google.",
+                            details = userInfoContent
+                        });
+                    }
+
+                    Console.WriteLine("User info retrieved successfully, parsing...");
+
+                    // Parse user info
+                    var userInfo = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(userInfoContent);
+                    var email = userInfo["email"].ToString();
+                    var name = userInfo.ContainsKey("name") ? userInfo["name"].ToString() : "Google User";
+
+                    Console.WriteLine($"User Email: {email}");
+                    Console.WriteLine($"User Name: {name}");
+
+                    if (string.IsNullOrEmpty(email))
+                        return BadRequest(new { message = "Email not provided by Google." });
+
+                    Console.WriteLine("Processing user login/registration...");
+
+                    var user = await _authService.GetUserByEmailAsync(email);
+                    var isNewUser = false;
+
+                    if (user == null)
+                    {
+                        // Create new user from Google OAuth
+                        Console.WriteLine("Creating new user from Google OAuth...");
+                        user = new mstUser
+                        {
+                            strGUID = Guid.NewGuid().ToString(),
+                            strName = name ?? "Google User",
+                            strEmailId = email,
+                            bolsActive = true,
+                            strPassword = _authService.HashPassword(Guid.NewGuid().ToString()), // Hash random password for OAuth users
+                            strOTP = "000000", // Default OTP for OAuth users
+                            OtpExpiretIme = DateTime.UtcNow.AddHours(24), // OTP expires in 24 hours
+                            createDate = DateTime.UtcNow,
+                            ModifyDate = DateTime.UtcNow
+                        };
+                        _context.mstUsers.Add(user);
+                        await _context.SaveChangesAsync();
+                        isNewUser = true;
+                        Console.WriteLine($"New user created with GUID: {user.strGUID}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Existing user found with GUID: {user.strGUID}");
+                    }
+
+                    Console.WriteLine("Generating JWT token...");
+                    var token = _authService.GenerateJwtToken(user);
+                    
+                    // Clear the OAuth state cookie
+                    Response.Cookies.Delete("MoneyCare.OAuth.State", new CookieOptions
+                    {
+                        Path = "/",
+                        SameSite = SameSiteMode.None
+                    });
+
+                    Console.WriteLine("OAuth process completed successfully!");
+
+                    // Redirect to success page with token and user info
+                    var userInfoDTO = new UserReadDTO
+                    {
+                        strGUID = user.strGUID,
+                        strName = user.strName,
+                        strEmailId = user.strEmailId,
+                        bolsActive = user.bolsActive,
+                        createDate = user.createDate,
+                        ModifyDate = user.ModifyDate,
+                        AuthProvider = "google"
+                    };
+
+                    var responseData = new AuthResponseDTO
+                    {
+                        Token = token,
+                        User = userInfoDTO,
+                        AuthProvider = "google",
+                        IsNewUser = isNewUser,
+                        Message = isNewUser ? "Account created successfully with Google!" : "Login successful with Google!"
+                    };
+
+                    // For API calls, return JSON. For browser redirects, redirect to success page
+                    var acceptHeader = Request.Headers["Accept"].ToString();
+                    if (acceptHeader.Contains("application/json"))
+                    {
+                        Console.WriteLine("Returning JSON response for API call");
+                        return Ok(responseData);
+                    }
+
+                    // Try HTTPS first, then fallback to HTTP
+                    var frontendUrl = "https://localhost:3000";
+                    Console.WriteLine($"Redirecting to frontend with token: {token.Substring(0, 50)}...");
+                    Console.WriteLine($"Frontend URL: {frontendUrl}");
+                    
+                    return Redirect($"{frontendUrl}/oauth-callback?token={token}&provider=google&isNewUser={isNewUser}");
+                }
             }
             catch (Exception ex)
             {
@@ -427,6 +606,28 @@ namespace MoneyCareBackend.Controllers
                 oauthUrl = $"https://accounts.google.com/o/oauth2/v2/auth?client_id={clientId}&redirect_uri={Uri.EscapeDataString(redirectUri)}&response_type=code&scope=openid%20email%20profile",
                 cookies = Request.Cookies.Select(c => new { c.Key, c.Value }).ToList(),
                 headers = Request.Headers.Select(h => new { h.Key, Value = h.Value.ToString() }).ToList()
+            });
+        }
+
+        [HttpGet("test-oauth")]
+        public IActionResult TestOAuth()
+        {
+            var clientId = _configuration["Authentication:Google:ClientId"];
+            var clientSecret = _configuration["Authentication:Google:ClientSecret"];
+            var redirectUri = $"{Request.Scheme}://{Request.Host}/api/auth/google-callback";
+            
+            return Ok(new { 
+                message = "OAuth Configuration Test",
+                timestamp = DateTime.UtcNow,
+                googleClientId = !string.IsNullOrEmpty(clientId) ? $"{clientId.Substring(0, 20)}..." : "NOT SET",
+                googleClientSecret = !string.IsNullOrEmpty(clientSecret) ? "SET" : "NOT SET",
+                callbackPath = "/api/auth/google-callback",
+                baseUrl = $"{Request.Scheme}://{Request.Host}",
+                redirectUri = redirectUri,
+                oauthUrl = $"https://accounts.google.com/o/oauth2/v2/auth?client_id={clientId}&redirect_uri={Uri.EscapeDataString(redirectUri)}&response_type=code&scope=openid%20email%20profile",
+                cookies = Request.Cookies.Select(c => new { c.Key, c.Value }).ToList(),
+                headers = Request.Headers.Select(h => new { h.Key, Value = h.Value.ToString() }).ToList(),
+                note = "Using custom OAuth implementation - no built-in middleware"
             });
         }
 

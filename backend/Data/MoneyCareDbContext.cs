@@ -12,6 +12,9 @@ namespace MoneyCareBackend.Data
 
         public DbSet<mstUser> mstUsers { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
+        public DbSet<FileCategory> FileCategories { get; set; }
+        public DbSet<FileDocument> FileDocuments { get; set; }
+        public DbSet<FileDownload> FileDownloads { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -32,6 +35,49 @@ namespace MoneyCareBackend.Data
                 entity.Property(e => e.UserGuid).IsRequired();
                 entity.Property(e => e.Expires).IsRequired();
                 entity.Property(e => e.Created).IsRequired();
+            });
+
+            modelBuilder.Entity<FileCategory>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.Icon).HasMaxLength(50);
+                entity.Property(e => e.CreatedBy).HasMaxLength(50);
+                entity.Property(e => e.ModifiedBy).HasMaxLength(50);
+            });
+
+            modelBuilder.Entity<FileDocument>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.FileName).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.DisplayName).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.FilePath).IsRequired().HasMaxLength(500);
+                entity.Property(e => e.FileType).HasMaxLength(50);
+                entity.Property(e => e.UploadedBy).HasMaxLength(50);
+                entity.Property(e => e.ModifiedBy).HasMaxLength(50);
+                
+                entity.HasOne(e => e.Category)
+                    .WithMany(c => c.Documents)
+                    .HasForeignKey(e => e.CategoryId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<FileDownload>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.UserGuid).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.UserIP).HasMaxLength(45);
+                entity.Property(e => e.UserAgent).HasMaxLength(500);
+                
+                entity.HasOne(e => e.Document)
+                    .WithMany(d => d.Downloads)
+                    .HasForeignKey(e => e.DocumentId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                    
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserGuid)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
         }
     }
