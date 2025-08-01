@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MoneyCareBackend.Data;
 
@@ -11,9 +12,11 @@ using MoneyCareBackend.Data;
 namespace MoneyCareBackend.Migrations
 {
     [DbContext(typeof(MoneyCareDbContext))]
-    partial class MoneyCareDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250801093926_AddOtherFileTableAndRelationship")]
+    partial class AddOtherFileTableAndRelationship
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

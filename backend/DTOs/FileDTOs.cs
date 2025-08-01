@@ -67,6 +67,7 @@ namespace MoneyCareBackend.DTOs
         public int Id { get; set; }
         public int CategoryId { get; set; }
         public int? CircularId { get; set; }
+        public int? OtherFileId { get; set; }
         public string CategoryName { get; set; }
         public string FileName { get; set; }
         public string DisplayName { get; set; }
@@ -80,6 +81,7 @@ namespace MoneyCareBackend.DTOs
         public int DownloadCount { get; set; }
         public DateTime? LastDownloaded { get; set; }
         public CircularReadDTO? Circular { get; set; }
+        public OtherFileReadDTO? OtherFile { get; set; }
     }
 
     public class FileDownloadDTO
@@ -114,6 +116,19 @@ namespace MoneyCareBackend.DTOs
         public DateTime ModifiedDate { get; set; }
         public string CreatedBy { get; set; } = string.Empty;
         public string ModifiedBy { get; set; } = string.Empty;
+    }
+
+    public class OtherFileReadDTO
+    {
+        public int Id { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public string FileType { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime? ModifiedDate { get; set; }
+        public string? CreatedBy { get; set; }
+        public string? ModifiedBy { get; set; }
     }
 
     public class CategoryWithDocumentsDTO

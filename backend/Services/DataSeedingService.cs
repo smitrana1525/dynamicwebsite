@@ -224,6 +224,44 @@ namespace MoneyCareBackend.Services
             {
                 Console.WriteLine("Important Circulars category already exists.");
             }
+
+            // Ensure Other Files category exists
+            await EnsureOtherFilesCategoryExistsAsync();
+        }
+
+        private async Task EnsureOtherFilesCategoryExistsAsync()
+        {
+            // Check if Other Files category exists
+            var otherFilesCategory = await _context.FileCategories
+                .FirstOrDefaultAsync(c => c.Name == "Other Files");
+
+            if (otherFilesCategory == null)
+            {
+                // Get or create a default user
+                var defaultUserGuid = await GetOrCreateDefaultUserAsync();
+
+                // Create the Other Files category
+                var newCategory = new FileCategory
+                {
+                    Name = "Other Files",
+                    Icon = "FolderOpen",
+                    IsActive = true,
+                    SortOrder = 5,
+                    CreatedDate = DateTime.UtcNow,
+                    ModifiedDate = DateTime.UtcNow,
+                    CreatedBy = defaultUserGuid,
+                    ModifiedBy = defaultUserGuid
+                };
+
+                _context.FileCategories.Add(newCategory);
+                await _context.SaveChangesAsync();
+
+                Console.WriteLine("Other Files category created successfully.");
+            }
+            else
+            {
+                Console.WriteLine("Other Files category already exists.");
+            }
         }
     }
 } 

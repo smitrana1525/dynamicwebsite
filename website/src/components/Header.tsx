@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, X, ChevronDown, Phone, Mail, ExternalLink } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import FilePopupModal from './FilePopupModal';
+import { otherFileService, OtherFile } from '../services/otherFileService';
 
 interface SubItem {
   name: string;
   href: string;
   download?: string;
+  showPopup?: boolean;
+  fileType?: string;
+  fileSize?: string;
 }
 
 interface HeaderProps {
@@ -24,6 +29,23 @@ const Header: React.FC<HeaderProps> = ({ currentPage = 'home' }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [popupModal, setPopupModal] = useState<{
+    isOpen: boolean;
+    fileName: string;
+    fileType: string;
+    fileSize?: string;
+    downloadUrl?: string;
+    fileId?: number;
+  }>({
+    isOpen: false,
+    fileName: '',
+    fileType: '',
+    fileSize: '',
+    downloadUrl: '',
+    fileId: undefined
+  });
+  const [otherFiles, setOtherFiles] = useState<OtherFile[]>([]);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -54,6 +76,23 @@ const Header: React.FC<HeaderProps> = ({ currentPage = 'home' }) => {
     };
   }, [isMenuOpen]);
 
+  // Fetch Other Files from backend
+  useEffect(() => {
+    const fetchOtherFiles = async () => {
+      try {
+        setLoading(true);
+        const files = await otherFileService.getAllOtherFiles();
+        setOtherFiles(files);
+      } catch (error) {
+        console.error('Failed to fetch other files:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOtherFiles();
+  }, []);
+
   const toggleDropdown = (dropdown: string) => {
     setOpenDropdown(openDropdown === dropdown ? null : dropdown);
   };
@@ -62,44 +101,222 @@ const Header: React.FC<HeaderProps> = ({ currentPage = 'home' }) => {
     navigate('/');
   };
 
-  const navItems = [
-    { name: 'Home', href: '/' },
-    { name: 'About Us', href: '/about' },
-    { name: 'Services', href: '/services' },
-    { name: 'Downloads', href: '/downloads' },
-    {
-      name: 'Investor Charter',
-      href: '#',
-      dropdown: [
-        { name: 'Investor Charter - Depository', href: '/investor-charter' },
-        { name: 'Investor Charter Booking', href: '#', download: 'investor-charter-booking.pdf' },
-        { name: 'Investor Complaint', href: '#', download: 'investor-complaint.pdf' }
-      ]
-    },
-    { name: 'Bank Office', href: '/bank-office' },
-    {
-      name: 'Investor Section',
-      href: '#',
-      dropdown: [
-        { name: 'SEBI Risk Disclosure', href: '/sebi-risk-disclosure' },
-        { name: 'Most Important Terms & Conditions', href: '/mitc' },
-        { name: 'Important Circular of Clients', href: '/important-circular' },
-        { name: 'Freezing or Blocking of Trading Account', href: '/freezing-blocking' },
-        { name: 'Bank Details', href: '/bank-details' }
-      ]
-    },
-    { name: 'E-voting', href: 'https://www.evoting.nsdl.com/', external: true },
-    {
-      name: 'Contact',
-      href: '#',
-      dropdown: [
-        { name: 'Contact Us', href: '/contact' },
-        { name: 'AP Branch Details', href: '#', download: 'ap-branch-details.pdf' },
-        { name: 'KMP Details', href: '#', download: 'kmp-details.pdf' }
-      ]
-    },
-    { name: 'Open Account', href: '/open-account', cta: true }
-  ];
+  const handleFileClick = (subItem: SubItem) => {
+    if (subItem.showPopup) {
+      // Find the corresponding file from the fetched other files
+      const fileType = subItem.name === 'Investor Charter Booking' ? 'Investor Charter Booking' :
+                      subItem.name === 'Investor Complaint' ? 'Investor Complaint' :
+                      subItem.name === 'AP Branch Details' ? 'AP Branch Details' :
+                      subItem.name === 'KMP Details' ? 'KMP Details' : '';
+      
+      const matchingFile = otherFiles.find(file => file.fileType === fileType);
+      
+      if (matchingFile && matchingFile.fileDocument) {
+        setPopupModal({
+          isOpen: true,
+          fileName: matchingFile.fileType,
+          fileType: matchingFile.fileDocument.fileType.replace('.', ''),
+          fileSize: otherFileService.formatFileSize(matchingFile.fileDocument.fileSize),
+          downloadUrl: '',
+          fileId: matchingFile.id
+        });
+      } else {
+        // Fallback to static file if no dynamic file found
+        setPopupModal({
+          isOpen: true,
+          fileName: subItem.name,
+          fileType: subItem.fileType || 'pdf',
+          fileSize: subItem.fileSize,
+          downloadUrl: subItem.download
+        });
+      }
+    } else if (subItem.download) {
+      // Direct download for non-popup files
+      const link = document.createElement('a');
+      link.href = subItem.download;
+      link.download = subItem.download;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  const handleViewFile = async () => {
+    try {
+      if (popupModal.fileId) {
+        // Dynamic file from backend
+        const viewUrl = await otherFileService.showOtherFile(popupModal.fileId);
+        window.open(viewUrl, '_blank');
+      } else if (popupModal.downloadUrl) {
+        // Static file
+        window.open(popupModal.downloadUrl, '_blank');
+      }
+    } catch (error) {
+      console.error('Failed to view file:', error);
+    }
+    setPopupModal(prev => ({ ...prev, isOpen: false }));
+  };
+
+  const handleDownloadFile = async () => {
+    try {
+      if (popupModal.fileId) {
+        // Dynamic file from backend
+        const blob = await otherFileService.downloadOtherFile(popupModal.fileId);
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = popupModal.fileName + '.' + popupModal.fileType;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else if (popupModal.downloadUrl) {
+        // Static file
+        const link = document.createElement('a');
+        link.href = popupModal.downloadUrl;
+        link.download = popupModal.downloadUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (error) {
+      console.error('Failed to download file:', error);
+    }
+    setPopupModal(prev => ({ ...prev, isOpen: false }));
+  };
+
+  const closePopupModal = () => {
+    setPopupModal(prev => ({ ...prev, isOpen: false }));
+  };
+
+  // Get dynamic menu items based on fetched other files
+  const getDynamicMenuItems = () => {
+    const items = [
+      { name: 'Home', href: '/' },
+      { name: 'About Us', href: '/about' },
+      { name: 'Services', href: '/services' },
+      { name: 'Downloads', href: '/downloads' },
+      {
+        name: 'Investor Charter',
+        href: '#',
+        dropdown: [
+          { name: 'Investor Charter - Depository', href: '/investor-charter' },
+          { 
+            name: 'Investor Charter Booking', 
+            href: '#', 
+            download: 'investor-charter-booking.pdf',
+            showPopup: true,
+            fileType: 'pdf',
+            fileSize: '2.5 MB'
+          },
+          { 
+            name: 'Investor Complaint', 
+            href: '#', 
+            download: 'investor-complaint.pdf',
+            showPopup: true,
+            fileType: 'pdf',
+            fileSize: '1.8 MB'
+          }
+        ]
+      },
+      { name: 'Bank Office', href: '/bank-office' },
+      {
+        name: 'Investor Section',
+        href: '#',
+        dropdown: [
+          { name: 'SEBI Risk Disclosure', href: '/sebi-risk-disclosure' },
+          { name: 'Most Important Terms & Conditions', href: '/mitc' },
+          { name: 'Important Circular of Clients', href: '/important-circular' },
+          { name: 'Freezing or Blocking of Trading Account', href: '/freezing-blocking' },
+          { name: 'Bank Details', href: '/bank-details' }
+        ]
+      },
+      { name: 'E-voting', href: 'https://www.evoting.nsdl.com/', external: true },
+      {
+        name: 'Contact',
+        href: '#',
+        dropdown: [
+          { name: 'Contact Us', href: '/contact' },
+          { 
+            name: 'AP Branch Details', 
+            href: '#', 
+            download: 'ap-branch-details.pdf',
+            showPopup: true,
+            fileType: 'pdf',
+            fileSize: '3.2 MB'
+          },
+          { 
+            name: 'KMP Details', 
+            href: '#', 
+            download: 'kmp-details.pdf',
+            showPopup: true,
+            fileType: 'pdf',
+            fileSize: '1.5 MB'
+          }
+        ]
+      },
+      { name: 'Open Account', href: '/open-account', cta: true }
+    ];
+
+    // Update menu items with dynamic content if available
+    if (!loading && otherFiles.length > 0) {
+      // Update Investor Charter Booking
+      const investorCharterBooking = otherFiles.find(f => f.fileType === 'Investor Charter Booking');
+      if (investorCharterBooking) {
+        const investorCharterItem = items.find(item => item.name === 'Investor Charter');
+        if (investorCharterItem && investorCharterItem.dropdown) {
+          const bookingItem = investorCharterItem.dropdown.find(sub => sub.name === 'Investor Charter Booking');
+          if (bookingItem) {
+            bookingItem.name = investorCharterBooking.fileType;
+            bookingItem.fileSize = otherFileService.formatFileSize(investorCharterBooking.fileDocument?.fileSize || 0);
+          }
+        }
+      }
+
+      // Update Investor Complaint
+      const investorComplaint = otherFiles.find(f => f.fileType === 'Investor Complaint');
+      if (investorComplaint) {
+        const investorCharterItem = items.find(item => item.name === 'Investor Charter');
+        if (investorCharterItem && investorCharterItem.dropdown) {
+          const complaintItem = investorCharterItem.dropdown.find(sub => sub.name === 'Investor Complaint');
+          if (complaintItem) {
+            complaintItem.name = investorComplaint.fileType;
+            complaintItem.fileSize = otherFileService.formatFileSize(investorComplaint.fileDocument?.fileSize || 0);
+          }
+        }
+      }
+
+      // Update AP Branch Details
+      const apBranchDetails = otherFiles.find(f => f.fileType === 'AP Branch Details');
+      if (apBranchDetails) {
+        const contactItem = items.find(item => item.name === 'Contact');
+        if (contactItem && contactItem.dropdown) {
+          const apItem = contactItem.dropdown.find(sub => sub.name === 'AP Branch Details');
+          if (apItem) {
+            apItem.name = apBranchDetails.fileType;
+            apItem.fileSize = otherFileService.formatFileSize(apBranchDetails.fileDocument?.fileSize || 0);
+          }
+        }
+      }
+
+      // Update KMP Details
+      const kmpDetails = otherFiles.find(f => f.fileType === 'KMP Details');
+      if (kmpDetails) {
+        const contactItem = items.find(item => item.name === 'Contact');
+        if (contactItem && contactItem.dropdown) {
+          const kmpItem = contactItem.dropdown.find(sub => sub.name === 'KMP Details');
+          if (kmpItem) {
+            kmpItem.name = kmpDetails.fileType;
+            kmpItem.fileSize = otherFileService.formatFileSize(kmpDetails.fileDocument?.fileSize || 0);
+          }
+        }
+      }
+    }
+
+    return items;
+  };
+
+      const navItems = getDynamicMenuItems();
 
   return (
     <header className={`fixed w-full z-50 transition-all duration-300 ${isScrolled ? 'bg-white/95 backdrop-blur-md shadow-lg' : 'bg-transparent'}`}>
@@ -185,13 +402,12 @@ const Header: React.FC<HeaderProps> = ({ currentPage = 'home' }) => {
                           {item.dropdown.map((subItem) => (
                             <React.Fragment key={subItem.name}>
                               {subItem.download ? (
-                                <a
-                                  href={subItem.href}
-                                  download={subItem.download}
-                                  className="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                                <button
+                                  onClick={() => handleFileClick(subItem)}
+                                  className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                                 >
                                   {subItem.name}
-                                </a>
+                                </button>
                               ) : (
                                 <Link
                                   to={subItem.href}
@@ -262,13 +478,15 @@ const Header: React.FC<HeaderProps> = ({ currentPage = 'home' }) => {
                             {item.dropdown.map((subItem) => (
                               <React.Fragment key={subItem.name}>
                                 {subItem.download ? (
-                                  <a
-                                    href={subItem.href}
-                                    download={subItem.download}
-                                    className="block px-4 py-2 text-sm text-blue-100 hover:bg-blue-700 hover:text-orange-400 transition-all duration-200 rounded-md"
+                                  <button
+                                    onClick={() => {
+                                      handleFileClick(subItem);
+                                      setIsMenuOpen(false);
+                                    }}
+                                    className="block w-full text-left px-4 py-2 text-sm text-blue-100 hover:bg-blue-700 hover:text-orange-400 transition-all duration-200 rounded-md"
                                   >
                                     <span className="truncate">{subItem.name}</span>
-                                  </a>
+                                  </button>
                                 ) : (
                                   <Link
                                     to={subItem.href}
@@ -304,6 +522,17 @@ const Header: React.FC<HeaderProps> = ({ currentPage = 'home' }) => {
             </div>
         </div>
       </nav>
+      
+      {/* File Popup Modal */}
+      <FilePopupModal
+        isOpen={popupModal.isOpen}
+        onClose={closePopupModal}
+        fileName={popupModal.fileName}
+        fileType={popupModal.fileType}
+        fileSize={popupModal.fileSize}
+        onView={handleViewFile}
+        onDownload={handleDownloadFile}
+      />
     </header>
   );
 };

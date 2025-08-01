@@ -16,6 +16,7 @@ namespace MoneyCareBackend.Data
         public DbSet<FileDocument> FileDocuments { get; set; }
         public DbSet<FileDownload> FileDownloads { get; set; }
         public DbSet<Circular> Circulars { get; set; }
+        public DbSet<OtherFile> OtherFiles { get; set; }
         public DbSet<Contact> Contacts { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -67,6 +68,11 @@ namespace MoneyCareBackend.Data
                     .WithOne(c => c.Document)
                     .HasForeignKey<FileDocument>(e => e.CircularId)
                     .OnDelete(DeleteBehavior.SetNull);
+                    
+                entity.HasOne(e => e.OtherFile)
+                    .WithOne(o => o.FileDocument)
+                    .HasForeignKey<FileDocument>(e => e.OtherFileId)
+                    .OnDelete(DeleteBehavior.SetNull);
             });
 
             modelBuilder.Entity<FileDownload>(entity =>
@@ -96,6 +102,17 @@ namespace MoneyCareBackend.Data
                 entity.Property(e => e.ModifiedBy).HasMaxLength(50);
                 entity.Property(e => e.CreatedDate).IsRequired();
                 entity.Property(e => e.ModifiedDate).IsRequired();
+            });
+
+            modelBuilder.Entity<OtherFile>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Description).HasMaxLength(500);
+                entity.Property(e => e.FileType).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.CreatedBy).HasMaxLength(100);
+                entity.Property(e => e.ModifiedBy).HasMaxLength(100);
+                entity.Property(e => e.CreatedDate).IsRequired();
             });
 
             modelBuilder.Entity<Contact>(entity =>

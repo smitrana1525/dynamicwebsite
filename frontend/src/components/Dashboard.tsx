@@ -9,6 +9,7 @@ import CategoryManagement from './CategoryManagement';
 import DocumentUpload from './DocumentUpload';
 import CircularManagement from './CircularManagement';
 import ContactManagement from './ContactManagement';
+import OtherFileManagement from './OtherFileManagement';
 import { 
   DollarSign, 
   TrendingUp, 
@@ -521,53 +522,53 @@ const Dashboard: React.FC = () => {
 
       {/* Statistics Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
-        <Card>
+        <Card className="bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 shadow-sm dark:shadow-slate-900/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs md:text-sm font-medium">Total Documents</CardTitle>
-            <FileText className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
+            <CardTitle className="text-xs md:text-sm font-medium text-gray-900 dark:text-white">Total Documents</CardTitle>
+            <FileText className="h-3 w-3 md:h-4 md:w-4 text-gray-500 dark:text-slate-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-lg md:text-xl lg:text-2xl font-bold">{documents.length}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-lg md:text-xl lg:text-2xl font-bold text-gray-900 dark:text-white">{documents.length}</div>
+            <p className="text-xs text-gray-500 dark:text-slate-400">
               +12% from last month
             </p>
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 shadow-sm dark:shadow-slate-900/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs md:text-sm font-medium">Categories</CardTitle>
-            <FolderOpen className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
+            <CardTitle className="text-xs md:text-sm font-medium text-gray-900 dark:text-white">Categories</CardTitle>
+            <FolderOpen className="h-3 w-3 md:h-4 md:w-4 text-gray-500 dark:text-slate-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-lg md:text-xl lg:text-2xl font-bold">{categories.length}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-lg md:text-xl lg:text-2xl font-bold text-gray-900 dark:text-white">{categories.length}</div>
+            <p className="text-xs text-gray-500 dark:text-slate-400">
               +2 new this week
             </p>
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 shadow-sm dark:shadow-slate-900/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs md:text-sm font-medium">Circulars</CardTitle>
-            <Bell className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
+            <CardTitle className="text-xs md:text-sm font-medium text-gray-900 dark:text-white">Circulars</CardTitle>
+            <Bell className="h-3 w-3 md:h-4 md:w-4 text-gray-500 dark:text-slate-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-lg md:text-xl lg:text-2xl font-bold">8</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-lg md:text-xl lg:text-2xl font-bold text-gray-900 dark:text-white">8</div>
+            <p className="text-xs text-gray-500 dark:text-slate-400">
               +1 new today
             </p>
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 shadow-sm dark:shadow-slate-900/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs md:text-sm font-medium">Contacts</CardTitle>
-            <Mail className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
+            <CardTitle className="text-xs md:text-sm font-medium text-gray-900 dark:text-white">Contacts</CardTitle>
+            <Mail className="h-3 w-3 md:h-4 md:w-4 text-gray-500 dark:text-slate-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-lg md:text-xl lg:text-2xl font-bold">24</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-lg md:text-xl lg:text-2xl font-bold text-gray-900 dark:text-white">24</div>
+            <p className="text-xs text-gray-500 dark:text-slate-400">
               +3 unread messages
             </p>
           </CardContent>
@@ -575,10 +576,10 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Quick Actions */}
-      <Card>
+      <Card className="bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 shadow-sm dark:shadow-slate-900/20">
         <CardHeader>
-          <CardTitle className="text-sm md:text-base">Quick Actions</CardTitle>
-          <CardDescription className="text-xs md:text-sm">
+          <CardTitle className="text-sm md:text-base text-gray-900 dark:text-white">Quick Actions</CardTitle>
+          <CardDescription className="text-xs md:text-sm text-gray-600 dark:text-slate-400">
             Common tasks and shortcuts
           </CardDescription>
         </CardHeader>
@@ -586,7 +587,7 @@ const Dashboard: React.FC = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
             <Button 
               variant="outline" 
-              className="h-16 md:h-20 flex flex-col space-y-1 md:space-y-2 p-2"
+              className="h-16 md:h-20 flex flex-col space-y-1 md:space-y-2 p-2 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700"
               onClick={() => setActiveTab('downloads')}
             >
               <Download className="h-4 w-4 md:h-6 md:w-6" />
@@ -594,7 +595,7 @@ const Dashboard: React.FC = () => {
             </Button>
             <Button 
               variant="outline" 
-              className="h-16 md:h-20 flex flex-col space-y-1 md:space-y-2 p-2"
+              className="h-16 md:h-20 flex flex-col space-y-1 md:space-y-2 p-2 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700"
               onClick={() => setActiveTab('circulars')}
             >
               <Bell className="h-4 w-4 md:h-6 md:w-6" />
@@ -602,7 +603,7 @@ const Dashboard: React.FC = () => {
             </Button>
             <Button 
               variant="outline" 
-              className="h-16 md:h-20 flex flex-col space-y-1 md:space-y-2 p-2"
+              className="h-16 md:h-20 flex flex-col space-y-1 md:space-y-2 p-2 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700"
               onClick={() => setActiveTab('other-files')}
             >
               <FolderOpen className="h-4 w-4 md:h-6 md:w-6" />
@@ -610,7 +611,7 @@ const Dashboard: React.FC = () => {
             </Button>
             <Button 
               variant="outline" 
-              className="h-16 md:h-20 flex flex-col space-y-1 md:space-y-2 p-2"
+              className="h-16 md:h-20 flex flex-col space-y-1 md:space-y-2 p-2 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700"
               onClick={handleProfileModalOpen}
             >
               <User className="h-4 w-4 md:h-6 md:w-6" />
@@ -621,10 +622,10 @@ const Dashboard: React.FC = () => {
       </Card>
 
       {/* Recent Activity */}
-      <Card>
+      <Card className="bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 shadow-sm dark:shadow-slate-900/20">
         <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-gray-900 dark:text-white">Recent Activity</CardTitle>
+          <CardDescription className="text-gray-600 dark:text-slate-400">
             Latest updates and activities
           </CardDescription>
         </CardHeader>
@@ -638,8 +639,8 @@ const Dashboard: React.FC = () => {
                     <Icon className="h-4 w-4" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{notification.message}</p>
-                    <p className="text-xs text-gray-500">{formatNotificationTime(notification.timestamp)}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{notification.message}</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">{formatNotificationTime(notification.timestamp)}</p>
                   </div>
                 </div>
               );
@@ -1244,20 +1245,7 @@ const Dashboard: React.FC = () => {
 
 
 
-  const renderOtherFiles = () => (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Other Files Management</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-            <p className="text-gray-500">Other files management interface will be displayed here</p>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
+  const renderOtherFiles = () => <OtherFileManagement />;
 
   return (
     <div className="min-h-screen bg-gray-50">
