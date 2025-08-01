@@ -4,5 +4,6 @@ namespace MoneyCareBackend.Services
     {
         Task<bool> SendOTPEmailAsync(string email, string otp, string userName);
         Task<bool> SendPasswordResetEmailAsync(string email, string userName);
+        Task<bool> SendEmailAsync(string email, string subject, string body);
     }
 } 

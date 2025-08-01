@@ -32,6 +32,9 @@ namespace MoneyCareBackend.Services
 
         // Statistics
         Task<object> GetDownloadStatisticsAsync();
+        
+        // Context access
+        MoneyCareDbContext GetDbContext();
     }
 
     public class FileManagementService : IFileManagementService
@@ -286,11 +289,13 @@ namespace MoneyCareBackend.Services
         public async Task<List<FileDocumentReadDTO>> GetDocumentsByCategoryAsync(int categoryId)
         {
             return await _context.FileDocuments
+                .Include(d => d.Circular)
                 .Where(d => d.CategoryId == categoryId && d.IsActive)
                 .Select(d => new FileDocumentReadDTO
                 {
                     Id = d.Id,
                     CategoryId = d.CategoryId,
+                    CircularId = d.CircularId,
                     CategoryName = d.Category.Name,
                     FileName = d.FileName,
                     DisplayName = d.DisplayName,
@@ -302,7 +307,18 @@ namespace MoneyCareBackend.Services
                     UploadedBy = d.UploadedBy,
                     ModifiedBy = d.ModifiedBy,
                     DownloadCount = d.Downloads.Count,
-                    LastDownloaded = d.Downloads.OrderByDescending(dl => dl.DownloadDate).FirstOrDefault().DownloadDate
+                    LastDownloaded = d.Downloads.OrderByDescending(dl => dl.DownloadDate).FirstOrDefault().DownloadDate,
+                    Circular = d.Circular != null ? new CircularReadDTO
+                    {
+                        Id = d.Circular.Id,
+                        Subject = d.Circular.Subject,
+                        Description = d.Circular.Description,
+                        IsActive = d.Circular.IsActive,
+                        CreatedDate = d.Circular.CreatedDate,
+                        ModifiedDate = d.Circular.ModifiedDate,
+                        CreatedBy = d.Circular.CreatedBy,
+                        ModifiedBy = d.Circular.ModifiedBy
+                    } : null
                 })
                 .OrderBy(d => d.DisplayName)
                 .ToListAsync();
@@ -311,11 +327,13 @@ namespace MoneyCareBackend.Services
         public async Task<FileDocumentReadDTO> GetDocumentByIdAsync(int id)
         {
             var document = await _context.FileDocuments
+                .Include(d => d.Circular)
                 .Where(d => d.Id == id)
                 .Select(d => new FileDocumentReadDTO
                 {
                     Id = d.Id,
                     CategoryId = d.CategoryId,
+                    CircularId = d.CircularId,
                     CategoryName = d.Category.Name,
                     FileName = d.FileName,
                     DisplayName = d.DisplayName,
@@ -327,7 +345,18 @@ namespace MoneyCareBackend.Services
                     UploadedBy = d.UploadedBy,
                     ModifiedBy = d.ModifiedBy,
                     DownloadCount = d.Downloads.Count,
-                    LastDownloaded = d.Downloads.OrderByDescending(dl => dl.DownloadDate).FirstOrDefault().DownloadDate
+                    LastDownloaded = d.Downloads.OrderByDescending(dl => dl.DownloadDate).FirstOrDefault().DownloadDate,
+                    Circular = d.Circular != null ? new CircularReadDTO
+                    {
+                        Id = d.Circular.Id,
+                        Subject = d.Circular.Subject,
+                        Description = d.Circular.Description,
+                        IsActive = d.Circular.IsActive,
+                        CreatedDate = d.Circular.CreatedDate,
+                        ModifiedDate = d.Circular.ModifiedDate,
+                        CreatedBy = d.Circular.CreatedBy,
+                        ModifiedBy = d.Circular.ModifiedBy
+                    } : null
                 })
                 .FirstOrDefaultAsync();
 
@@ -480,6 +509,11 @@ namespace MoneyCareBackend.Services
                 RecentDownloads = recentDownloads,
                 TopDocuments = topDocuments
             };
+        }
+
+        public MoneyCareDbContext GetDbContext()
+        {
+            return _context;
         }
     }
 } 

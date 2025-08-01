@@ -27,6 +27,9 @@ builder.Services.AddScoped<IFileManagementService, FileManagementService>();
 // Register DataSeedingService
 builder.Services.AddScoped<IDataSeedingService, DataSeedingService>();
 
+// Register ContactService
+builder.Services.AddScoped<IContactService, ContactService>();
+
 // Add HttpContextAccessor for getting user IP and user agent
 builder.Services.AddHttpContextAccessor();
 

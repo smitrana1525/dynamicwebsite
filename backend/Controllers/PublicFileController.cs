@@ -81,6 +81,39 @@ namespace MoneyCareBackend.Controllers
             }
         }
 
+        // Show document (view in browser)
+        [HttpGet("documents/{id}/show")]
+        public async Task<IActionResult> ShowDocument(int id)
+        {
+            try
+            {
+                var document = await _fileService.GetDocumentByIdAsync(id);
+                var filePath = await _fileService.GetDocumentDownloadPathAsync(id);
+                
+                if (!System.IO.File.Exists(filePath))
+                {
+                    return NotFound(new { message = "File not found on server" });
+                }
+
+                var contentType = GetContentType(Path.GetExtension(document.FileName));
+                
+                // For show action, we don't record download - just display in browser
+                return PhysicalFile(filePath, contentType);
+            }
+            catch (ArgumentException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (FileNotFoundException)
+            {
+                return NotFound(new { message = "File not found on server" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Failed to show document", error = ex.Message });
+            }
+        }
+
         // Download document
         [HttpGet("documents/{id}/download")]
         public async Task<IActionResult> DownloadDocument(int id)

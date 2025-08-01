@@ -99,6 +99,45 @@ namespace MoneyCareBackend.Services
             }
         }
 
+        public async Task<bool> SendEmailAsync(string email, string subject, string body)
+        {
+            try
+            {
+                var smtpSettings = _configuration.GetSection("SmtpSettings");
+                var fromEmail = smtpSettings["FromEmail"];
+                var fromName = smtpSettings["FromName"];
+                var smtpHost = smtpSettings["Host"];
+                var smtpPort = int.Parse(smtpSettings["Port"]);
+                var smtpUsername = smtpSettings["Username"];
+                var smtpPassword = smtpSettings["Password"];
+                var enableSsl = bool.Parse(smtpSettings["EnableSsl"]);
+
+                using var client = new SmtpClient(smtpHost, smtpPort)
+                {
+                    Credentials = new NetworkCredential(smtpUsername, smtpPassword),
+                    EnableSsl = enableSsl
+                };
+
+                var message = new MailMessage
+                {
+                    From = new MailAddress(fromEmail, fromName),
+                    Subject = subject,
+                    Body = body,
+                    IsBodyHtml = true
+                };
+                message.To.Add(email);
+
+                await client.SendMailAsync(message);
+                _logger.LogInformation($"Email sent successfully to {email}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Failed to send email to {email}: {ex.Message}");
+                return false;
+            }
+        }
+
         private string GenerateOTPEmailBody(string otp, string userName)
         {
             var html = new StringBuilder();

@@ -1,66 +1,79 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import StockTicker from '../components/StockTicker';
+import { Download, FileText, Calendar, AlertCircle, Search, Filter, Eye } from 'lucide-react';
+import { circularService, Circular } from '../services/circularService';
 
 const ImportantCircular: React.FC = () => {
-  const circulars = [
-    {
-      date: 'July 24, 2024',
-      subject: 'NEW STATUS AND SUB-STATUS FOR DEMAT ACCOUNTS',
-      downloadLink: '/circulars/demat-accounts-status-july-2024.pdf'
-    },
-    {
-      date: 'July 18, 2024',
-      subject: 'ADDITIONAL CRITERIA FOR DORMANT DEMAT ACCOUNTS',
-      downloadLink: '/circulars/dormant-demat-criteria-july-2024.pdf'
-    },
-    {
-      date: 'July 18, 2024',
-      subject: 'VALIDATION OF KYC RECORDS WITH KRA',
-      downloadLink: '/circulars/kyc-validation-kra-july-2024.pdf'
-    },
-    {
-      date: 'July 10, 2024',
-      subject: 'SEBI MASTER CIR ON SURVEILLANCE OF SECURITIES MARKET',
-      downloadLink: '/circulars/sebi-surveillance-july-2024.pdf'
-    },
-    {
-      date: 'June 07, 2024',
-      subject: 'SEBI CIR UPLOADING OF KYC INFORMATION BY KYC REGISTRATION AGENCIES TO CENTRAL KYC RECORDS REGISTRY',
-      downloadLink: '/circulars/kyc-uploading-june-2024.pdf'
-    },
-    {
-      date: 'June 07, 2024',
-      subject: 'IMPLEMENTATION OF TWO FACTOR AUTHENTICATION IN EASI & EASIEST LOGIN',
-      downloadLink: '/circulars/two-factor-auth-june-2024.pdf'
-    },
-    {
-      date: 'May 31, 2024',
-      subject: 'REVIEW OF VALIDATION OF KYC RECORDS WITH KRA',
-      downloadLink: '/circulars/kyc-review-may-2024.pdf'
-    },
-    {
-      date: 'April 15, 2024',
-      subject: 'AADHAAR SEEDING (LINKAGE OF PAN WITH AADHAAR)',
-      downloadLink: '/circulars/aadhaar-pan-linkage-april-2024.pdf'
-    },
-    {
-      date: 'April 05, 2024',
-      subject: 'SCORES 2.0 New Technology to strengthen SEBI Complaint Redressal System for Investors',
-      downloadLink: '/circulars/scores-2-0-april-2024.pdf'
-    }
-  ];
+  const [circulars, setCirculars] = useState<Circular[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [downloading, setDownloading] = useState<number | null>(null);
 
-  const handleDownload = (downloadLink: string, subject: string) => {
-    // Create a temporary link element to trigger download
-    const link = document.createElement('a');
-    link.href = downloadLink;
-    link.download = `${subject.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  useEffect(() => {
+    loadCirculars();
+    
+    // Subscribe to changes in the shared service
+    const unsubscribe = circularService.subscribe(() => {
+      loadCirculars();
+    });
+    
+    // Cleanup subscription on unmount
+    return unsubscribe;
+  }, []);
+
+  const loadCirculars = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Load circulars from the shared service
+      const circularsData = await circularService.getCirculars();
+      setCirculars(circularsData);
+    } catch (error) {
+      console.error('Error loading circulars:', error);
+      setError('Failed to load circulars. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const handleShow = async (circular: Circular) => {
+    try {
+      const showUrl = await circularService.showFile(circular.id);
+      window.open(showUrl, '_blank');
+    } catch (err) {
+      console.error('Show failed:', err);
+      alert('Failed to open circular. Please try again.');
+    }
+  };
+
+  const handleDownload = async (circular: Circular) => {
+    try {
+      setDownloading(circular.id);
+      await circularService.downloadFile(circular.id);
+    } catch (error) {
+      console.error('Download failed:', error);
+      alert('Download failed. Please try again.');
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    return circularService.formatFileSize(bytes);
+  };
+
+  const formatDate = (dateString: string): string => {
+    return circularService.formatDate(dateString);
+  };
+
+  const filteredCirculars = circulars.filter(circular =>
+    circular.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    circular.description.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen bg-white">
@@ -91,96 +104,173 @@ const ImportantCircular: React.FC = () => {
       <section className="py-20 bg-gray-50">
         <div className="container mx-auto px-4">
           <div className="max-w-6xl mx-auto">
-            <div className="bg-white rounded-lg shadow-xl overflow-hidden">
+            <div className="bg-white rounded-lg shadow-xl p-8">
               
-              {/* Table Header */}
-              <div className="bg-blue-600 text-white p-6">
-                <h2 className="text-2xl font-bold">Important Circulars and Updates</h2>
-                <p className="text-blue-100 mt-2">Stay updated with the latest regulatory announcements and important information</p>
-              </div>
-
-              {/* Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-blue-600 text-white">
-                      <th className="px-6 py-4 text-left font-semibold text-lg">Date</th>
-                      <th className="px-6 py-4 text-left font-semibold text-lg">Subject</th>
-                      <th className="px-6 py-4 text-center font-semibold text-lg">Download</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {circulars.map((circular, index) => (
-                      <tr 
-                        key={index} 
-                        className={`${
-                          index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                        } hover:bg-blue-50 transition-colors duration-200`}
-                      >
-                        <td className="px-6 py-4 text-gray-800 font-medium">
-                          {circular.date}
-                        </td>
-                        <td className="px-6 py-4 text-gray-700 leading-relaxed">
-                          {circular.subject}
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <button
-                            onClick={() => handleDownload(circular.downloadLink, circular.subject)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2 mx-auto"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <span>Download</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Additional Information */}
-              <div className="p-6 bg-gray-50 border-t border-gray-200">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h3 className="text-lg font-semibold text-blue-800 mb-2">
-                      Stay Informed
-                    </h3>
-                    <p className="text-blue-700 text-sm">
-                      These circulars contain important regulatory updates that may affect your trading account and investments. 
-                      Please review them carefully and contact us if you have any questions.
-                    </p>
+              {/* Error Message */}
+              {error && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="flex items-center">
+                    <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
+                    <span className="text-red-700">{error}</span>
                   </div>
-                  <div className="bg-orange-50 p-4 rounded-lg">
-                    <h3 className="text-lg font-semibold text-orange-800 mb-2">
-                      Need Help?
-                    </h3>
-                    <p className="text-orange-700 text-sm">
-                      For clarification on any circular or regulatory update, please contact our support team 
-                      or reach out to our compliance officer.
-                    </p>
+                </div>
+              )}
+
+              {/* Search and Filter */}
+              <div className="mb-8">
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="flex-1">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search circulars..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button className="px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center">
+                      <Filter className="h-4 w-4 mr-2" />
+                      Filter
+                    </button>
                   </div>
                 </div>
               </div>
 
-              {/* Contact Information */}
-              <div className="p-6 bg-white border-t border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Contact Information
+              {/* Loading State */}
+              {loading && (
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="mt-4 text-gray-600">Loading circulars...</p>
+                </div>
+              )}
+
+              {/* Circulars Table */}
+              {!loading && (
+                <div className="overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Date
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Subject
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Title
+                        </th>
+                        <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {filteredCirculars.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-6 py-12 text-center">
+                            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                            <p className="text-gray-600">
+                              {searchTerm ? 'No circulars found matching your search' : 'No circulars available'}
+                            </p>
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredCirculars.map((circular) => (
+                          <tr key={circular.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center">
+                                <Calendar className="h-4 w-4 text-gray-400 mr-2" />
+                                <span className="text-sm text-gray-900">
+                                  {formatDate(circular.uploadDate)}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="text-sm font-medium text-gray-900">
+                                {circular.title}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">
+                                  {circular.title}
+                                </div>
+                                <div className="text-sm text-gray-500 mt-1">
+                                  {circular.description}
+                                </div>
+                                <div className="flex items-center space-x-4 mt-2 text-xs text-gray-400">
+                                  <span>{circular.fileType.toUpperCase()}</span>
+                                  <span>{formatFileSize(circular.fileSize)}</span>
+                                  <span>{circular.downloadCount} downloads</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right">
+                              <div className="flex space-x-2 justify-end">
+                                <button
+                                  onClick={() => handleShow(circular)}
+                                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                                >
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  Show
+                                </button>
+                                <button
+                                  onClick={() => handleDownload(circular)}
+                                  disabled={downloading === circular.id}
+                                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  {downloading === circular.id ? (
+                                    <>
+                                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                      Downloading...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Download className="h-4 w-4 mr-2" />
+                                      Download
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Additional Information */}
+              <div className="mt-12 p-6 bg-gray-50 rounded-lg">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                  Important Information
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-gray-700">
+                <div className="text-gray-700 space-y-2 text-sm">
+                  <p>• All circulars are official regulatory announcements and should be read carefully.</p>
+                  <p>• Circulars are updated regularly to ensure compliance with latest regulations.</p>
+                  <p>• For any clarification regarding circulars, please contact our compliance team.</p>
+                  <p>• Keep yourself updated with the latest circulars to avoid any compliance issues.</p>
+                </div>
+              </div>
+
+              {/* Contact Information */}
+              <div className="mt-8 p-6 bg-blue-50 rounded-lg">
+                <h3 className="text-lg font-semibold text-blue-800 mb-3">
+                  Need Help?
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-blue-700">
                   <div>
-                    <p><strong>Email:</strong> info@moneycareindia.co.in</p>
+                    <p><strong>Email:</strong> compliance@moneycareindia.co.in</p>
                     <p><strong>Phone:</strong> +91-22-6234-5678</p>
                   </div>
                   <div>
                     <p><strong>Compliance Officer:</strong> Mr. Manish Thakor</p>
                     <p><strong>Grievance ID:</strong> complaint@moneycareindia.in</p>
-                  </div>
-                  <div>
-                    <p><strong>SEBI SCORES:</strong> scores.sebi.gov.in</p>
-                    <p><strong>Address:</strong> 50-A, 3rd Floor, Perin Nariman Street, Mumbai</p>
                   </div>
                 </div>
               </div>

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MoneyCareBackend.Data;
 
@@ -11,9 +12,11 @@ using MoneyCareBackend.Data;
 namespace MoneyCareBackend.Migrations
 {
     [DbContext(typeof(MoneyCareDbContext))]
-    partial class MoneyCareDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250801050429_AddCircularTableAndRelationship")]
+    partial class AddCircularTableAndRelationship
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -62,81 +65,6 @@ namespace MoneyCareBackend.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Circulars");
-                });
-
-            modelBuilder.Entity("MoneyCareBackend.Models.Contact", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AdminReply")
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
-
-                    b.Property<DateTime>("CreatedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<bool>("IsRead")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsReplied")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Message")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Phone")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<DateTime?>("ReadDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("RepliedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime?>("RepliedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Source")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("Subject")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("UserAgent")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("UserIP")
-                        .IsRequired()
-                        .HasMaxLength(45)
-                        .HasColumnType("nvarchar(45)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Contacts");
                 });
 
             modelBuilder.Entity("MoneyCareBackend.Models.FileCategory", b =>
@@ -404,7 +332,8 @@ namespace MoneyCareBackend.Migrations
 
             modelBuilder.Entity("MoneyCareBackend.Models.Circular", b =>
                 {
-                    b.Navigation("Document");
+                    b.Navigation("Document")
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("MoneyCareBackend.Models.FileCategory", b =>

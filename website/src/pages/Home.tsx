@@ -1,10 +1,53 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ArrowRight, Shield, TrendingUp, Users, Award, Phone, Mail, MapPin, UserPlus, Settings, Plus } from 'lucide-react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import StockTicker from '../components/StockTicker';
+import { contactService, ContactCreateDTO } from '../services/contactService';
 
 const Home: React.FC = () => {
+  const [formData, setFormData] = useState<ContactCreateDTO>({
+    name: '',
+    email: '',
+    subject: '',
+    message: '',
+    phone: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setSubmitStatus('idle');
+    setErrorMessage('');
+
+    try {
+      await contactService.submitContact(formData);
+      setSubmitStatus('success');
+      setFormData({
+        name: '',
+        email: '',
+        subject: '',
+        message: '',
+        phone: ''
+      });
+    } catch (error) {
+      setSubmitStatus('error');
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to submit form');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
   const services = [
     {
       icon: <TrendingUp className="w-8 h-8" />,
@@ -246,38 +289,110 @@ const Home: React.FC = () => {
             </div>
             
             <div className="bg-white/10 backdrop-blur-md p-8 rounded-lg border border-white/20">
-              <form className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Status Messages */}
+                {submitStatus === 'success' && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <div className="text-sm font-medium text-green-800">
+                          <p className="font-bold mb-2">Thank you! Your message has been sent successfully.</p>
+                          <div className="bg-white p-3 rounded border mt-2">
+                            <p className="text-xs text-gray-600 mb-1">Your submitted message:</p>
+                            <p className="text-sm font-medium text-gray-800 mb-1">Subject: {formData.subject}</p>
+                            <p className="text-sm text-gray-700">{formData.message}</p>
+                          </div>
+                          <p className="text-xs text-gray-600 mt-2">
+                            We have sent a confirmation email to {formData.email}. 
+                            Our team will get back to you soon!
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {submitStatus === 'error' && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm font-medium text-red-800">
+                          {errorMessage}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div>
-                  <label htmlFor="name" className="block text-sm font-medium mb-2 text-white">Name</label>
+                  <label htmlFor="name" className="block text-sm font-medium mb-2 text-white">Name *</label>
                   <input 
                     type="text" 
                     id="name" 
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    required
                     className="w-full px-4 py-3 bg-white/20 border border-white/30 rounded-lg focus:ring-2 focus:ring-orange-400 focus:border-transparent text-white placeholder-white/70"
                     placeholder="Your Name"
                   />
                 </div>
                 <div>
-                  <label htmlFor="email" className="block text-sm font-medium mb-2 text-white">Email</label>
+                  <label htmlFor="email" className="block text-sm font-medium mb-2 text-white">Email *</label>
                   <input 
                     type="email" 
                     id="email" 
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    required
                     className="w-full px-4 py-3 bg-white/20 border border-white/30 rounded-lg focus:ring-2 focus:ring-orange-400 focus:border-transparent text-white placeholder-white/70"
                     placeholder="your@email.com"
                   />
                 </div>
                 <div>
-                  <label htmlFor="subject" className="block text-sm font-medium mb-2 text-white">Subject</label>
+                  <label htmlFor="phone" className="block text-sm font-medium mb-2 text-white">Phone</label>
+                  <input 
+                    type="tel" 
+                    id="phone" 
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 bg-white/20 border border-white/30 rounded-lg focus:ring-2 focus:ring-orange-400 focus:border-transparent text-white placeholder-white/70"
+                    placeholder="Your phone number"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="subject" className="block text-sm font-medium mb-2 text-white">Subject *</label>
                   <input 
                     type="text" 
                     id="subject" 
+                    name="subject"
+                    value={formData.subject}
+                    onChange={handleInputChange}
+                    required
                     className="w-full px-4 py-3 bg-white/20 border border-white/30 rounded-lg focus:ring-2 focus:ring-orange-400 focus:border-transparent text-white placeholder-white/70"
                     placeholder="Subject"
                   />
                 </div>
                 <div>
-                  <label htmlFor="message" className="block text-sm font-medium mb-2 text-white">Message</label>
+                  <label htmlFor="message" className="block text-sm font-medium mb-2 text-white">Message *</label>
                   <textarea 
                     id="message" 
+                    name="message"
+                    value={formData.message}
+                    onChange={handleInputChange}
+                    required
                     rows={4}
                     className="w-full px-4 py-3 bg-white/20 border border-white/30 rounded-lg focus:ring-2 focus:ring-orange-400 focus:border-transparent text-white placeholder-white/70"
                     placeholder="Your message..."
@@ -285,9 +400,17 @@ const Home: React.FC = () => {
                 </div>
                 <button 
                   type="submit"
-                  className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white py-3 px-6 rounded-lg font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg"
+                  disabled={isSubmitting}
+                  className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:from-gray-400 disabled:to-gray-500 text-white py-3 px-6 rounded-lg font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg"
                 >
-                  Send Message
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                      Sending...
+                    </>
+                  ) : (
+                    'Send Message'
+                  )}
                 </button>
               </form>
             </div>

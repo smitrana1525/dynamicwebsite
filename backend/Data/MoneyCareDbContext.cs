@@ -15,6 +15,8 @@ namespace MoneyCareBackend.Data
         public DbSet<FileCategory> FileCategories { get; set; }
         public DbSet<FileDocument> FileDocuments { get; set; }
         public DbSet<FileDownload> FileDownloads { get; set; }
+        public DbSet<Circular> Circulars { get; set; }
+        public DbSet<Contact> Contacts { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -60,6 +62,11 @@ namespace MoneyCareBackend.Data
                     .WithMany(c => c.Documents)
                     .HasForeignKey(e => e.CategoryId)
                     .OnDelete(DeleteBehavior.Cascade);
+                    
+                entity.HasOne(e => e.Circular)
+                    .WithOne(c => c.Document)
+                    .HasForeignKey<FileDocument>(e => e.CircularId)
+                    .OnDelete(DeleteBehavior.SetNull);
             });
 
             modelBuilder.Entity<FileDownload>(entity =>
@@ -78,6 +85,33 @@ namespace MoneyCareBackend.Data
                     .WithMany()
                     .HasForeignKey(e => e.UserGuid)
                     .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<Circular>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Subject).HasMaxLength(200).IsRequired();
+                entity.Property(e => e.Description).HasMaxLength(1000);
+                entity.Property(e => e.CreatedBy).HasMaxLength(50);
+                entity.Property(e => e.ModifiedBy).HasMaxLength(50);
+                entity.Property(e => e.CreatedDate).IsRequired();
+                entity.Property(e => e.ModifiedDate).IsRequired();
+            });
+
+            modelBuilder.Entity<Contact>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.Email).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.Subject).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Message).IsRequired().HasMaxLength(2000);
+                entity.Property(e => e.Phone).HasMaxLength(20);
+                entity.Property(e => e.Source).HasMaxLength(20);
+                entity.Property(e => e.UserIP).HasMaxLength(45);
+                entity.Property(e => e.UserAgent).HasMaxLength(500);
+                entity.Property(e => e.AdminReply).HasMaxLength(2000);
+                entity.Property(e => e.RepliedBy).HasMaxLength(100);
+                entity.Property(e => e.CreatedDate).IsRequired();
             });
         }
     }

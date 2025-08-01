@@ -7,6 +7,8 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import CategoryManagement from './CategoryManagement';
 import DocumentUpload from './DocumentUpload';
+import CircularManagement from './CircularManagement';
+import ContactManagement from './ContactManagement';
 import { 
   DollarSign, 
   TrendingUp, 
@@ -22,9 +24,6 @@ import {
   FileText,
   FolderOpen,
   Home,
-  Calendar,
-  PieChart,
-  Target,
   Download,
   Trash2,
   Eye,
@@ -82,8 +81,12 @@ const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('home');
   const [downloadsSubTab, setDownloadsSubTab] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [notifications, setNotifications] = useState<Array<{id: number, message: string, type: 'info' | 'warning' | 'success', timestamp: Date}>>([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(3);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('all');
@@ -117,6 +120,30 @@ const Dashboard: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(timer);
+  }, []);
+
+  // Initialize sample notifications
+  useEffect(() => {
+    setNotifications([
+      {
+        id: 1,
+        message: "New circular uploaded: Important Investment Guidelines",
+        type: 'info',
+        timestamp: new Date(Date.now() - 1000 * 60 * 30) // 30 minutes ago
+      },
+      {
+        id: 2,
+        message: "Contact form submitted by John Doe",
+        type: 'success',
+        timestamp: new Date(Date.now() - 1000 * 60 * 60) // 1 hour ago
+      },
+      {
+        id: 3,
+        message: "System maintenance scheduled for tomorrow",
+        type: 'warning',
+        timestamp: new Date(Date.now() - 1000 * 60 * 120) // 2 hours ago
+      }
+    ]);
   }, []);
 
   // Load categories on component mount
@@ -400,6 +427,34 @@ const Dashboard: React.FC = () => {
     });
   };
 
+  const formatNotificationTime = (date: Date) => {
+    const now = new Date();
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+    return `${Math.floor(diffInMinutes / 1440)}d ago`;
+  };
+
+  const getNotificationIcon = (type: 'info' | 'warning' | 'success') => {
+    switch (type) {
+      case 'info': return Info;
+      case 'warning': return AlertCircle;
+      case 'success': return CheckCircle;
+      default: return Info;
+    }
+  };
+
+  const getNotificationColor = (type: 'info' | 'warning' | 'success') => {
+    switch (type) {
+      case 'info': return 'text-blue-600 bg-blue-50';
+      case 'warning': return 'text-yellow-600 bg-yellow-50';
+      case 'success': return 'text-green-600 bg-green-50';
+      default: return 'text-blue-600 bg-blue-50';
+    }
+  };
+
   const filteredDocuments = documents.filter(document => {
     const matchesSearch = document.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          document.categoryName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -411,10 +466,9 @@ const Dashboard: React.FC = () => {
   const sidebarItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'downloads', label: 'Downloads', icon: Download },
-    { id: 'files', label: 'Files', icon: FolderOpen },
-    { id: 'analytics', label: 'Analytics', icon: PieChart },
-    { id: 'goals', label: 'Goals', icon: Target },
-    { id: 'calendar', label: 'Calendar', icon: Calendar },
+    { id: 'circulars', label: 'Circulars', icon: Bell },
+    { id: 'other-files', label: 'Other Files', icon: FolderOpen },
+    { id: 'contacts', label: 'Contacts', icon: Mail },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
@@ -427,39 +481,94 @@ const Dashboard: React.FC = () => {
   const renderHome = () => (
     <div className="space-y-6">
       {/* Greeting and Time Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         {/* Clock Card */}
-        <Card className="lg:col-span-1">
+        <Card className="md:col-span-1 lg:col-span-1">
           <CardHeader className="text-center">
-            <CardTitle className="flex items-center justify-center space-x-2">
-              <Clock className="h-6 w-6 text-blue-600" />
+            <CardTitle className="flex items-center justify-center space-x-2 text-sm md:text-base">
+              <Clock className="h-5 w-5 md:h-6 md:w-6 text-blue-600" />
               <span>Current Time</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="text-center">
-            <div className="text-4xl font-bold text-gray-900 mb-2">
+            <div className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
               {formatTime(currentTime)}
             </div>
-            <div className="text-lg text-gray-600">
+            <div className="text-sm md:text-base lg:text-lg text-gray-600">
               {formatDate(currentTime)}
             </div>
           </CardContent>
         </Card>
 
         {/* Greeting Card */}
-        <Card className="lg:col-span-2">
+        <Card className="md:col-span-1 lg:col-span-2">
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
+            <CardTitle className="flex items-center space-x-2 text-sm md:text-base">
               {getWeatherIcon()}
               <span>{getGreeting()}, {user?.strName ? getFirstName(user.strName) : 'User'}!</span>
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-xs md:text-sm">
               Welcome to your MoneyCare dashboard. Here's what's happening today.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-gray-600">
+            <p className="text-gray-600 text-sm md:text-base">
               Manage your documents, view your profile, and access all your financial services from this dashboard.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs md:text-sm font-medium">Total Documents</CardTitle>
+            <FileText className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg md:text-xl lg:text-2xl font-bold">{documents.length}</div>
+            <p className="text-xs text-muted-foreground">
+              +12% from last month
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs md:text-sm font-medium">Categories</CardTitle>
+            <FolderOpen className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg md:text-xl lg:text-2xl font-bold">{categories.length}</div>
+            <p className="text-xs text-muted-foreground">
+              +2 new this week
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs md:text-sm font-medium">Circulars</CardTitle>
+            <Bell className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg md:text-xl lg:text-2xl font-bold">8</div>
+            <p className="text-xs text-muted-foreground">
+              +1 new today
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs md:text-sm font-medium">Contacts</CardTitle>
+            <Mail className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg md:text-xl lg:text-2xl font-bold">24</div>
+            <p className="text-xs text-muted-foreground">
+              +3 unread messages
             </p>
           </CardContent>
         </Card>
@@ -468,37 +577,236 @@ const Dashboard: React.FC = () => {
       {/* Quick Actions */}
       <Card>
         <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-sm md:text-base">Quick Actions</CardTitle>
+          <CardDescription className="text-xs md:text-sm">
             Common tasks and shortcuts
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
             <Button 
               variant="outline" 
-              className="h-20 flex flex-col space-y-2"
+              className="h-16 md:h-20 flex flex-col space-y-1 md:space-y-2 p-2"
               onClick={() => setActiveTab('downloads')}
             >
-              <Download className="h-6 w-6" />
-              <span className="text-sm">Downloads</span>
-            </Button>
-            <Button variant="outline" className="h-20 flex flex-col space-y-2">
-              <BarChart3 className="h-6 w-6" />
-              <span className="text-sm">View Reports</span>
-            </Button>
-            <Button variant="outline" className="h-20 flex flex-col space-y-2">
-              <Target className="h-6 w-6" />
-              <span className="text-sm">Set Goals</span>
+              <Download className="h-4 w-4 md:h-6 md:w-6" />
+              <span className="text-xs md:text-sm">Downloads</span>
             </Button>
             <Button 
               variant="outline" 
-              className="h-20 flex flex-col space-y-2"
+              className="h-16 md:h-20 flex flex-col space-y-1 md:space-y-2 p-2"
+              onClick={() => setActiveTab('circulars')}
+            >
+              <Bell className="h-4 w-4 md:h-6 md:w-6" />
+              <span className="text-xs md:text-sm">Circulars</span>
+            </Button>
+            <Button 
+              variant="outline" 
+              className="h-16 md:h-20 flex flex-col space-y-1 md:space-y-2 p-2"
+              onClick={() => setActiveTab('other-files')}
+            >
+              <FolderOpen className="h-4 w-4 md:h-6 md:w-6" />
+              <span className="text-xs md:text-sm">Other Files</span>
+            </Button>
+            <Button 
+              variant="outline" 
+              className="h-16 md:h-20 flex flex-col space-y-1 md:space-y-2 p-2"
               onClick={handleProfileModalOpen}
             >
-              <User className="h-6 w-6" />
-              <span className="text-sm">Profile</span>
+              <User className="h-4 w-4 md:h-6 md:w-6" />
+              <span className="text-xs md:text-sm">Profile</span>
             </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Recent Activity */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Activity</CardTitle>
+          <CardDescription>
+            Latest updates and activities
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {notifications.slice(0, 3).map((notification) => {
+              const Icon = getNotificationIcon(notification.type);
+              return (
+                <div key={notification.id} className="flex items-center space-x-4">
+                  <div className={`p-2 rounded-full ${getNotificationColor(notification.type)}`}>
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900">{notification.message}</p>
+                    <p className="text-xs text-gray-500">{formatNotificationTime(notification.timestamp)}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Quick Links */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm md:text-base">Quick Links</CardTitle>
+          <CardDescription className="text-xs md:text-sm">
+            Quick access to important sections
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+            <Button 
+              variant="outline" 
+              className="h-14 md:h-16 flex flex-col space-y-1 justify-center p-2"
+              onClick={() => setActiveTab('downloads')}
+            >
+              <Download className="h-4 w-4 md:h-5 md:w-5" />
+              <span className="text-xs">Browse Files</span>
+            </Button>
+            <Button 
+              variant="outline" 
+              className="h-14 md:h-16 flex flex-col space-y-1 justify-center p-2"
+              onClick={() => setActiveTab('circulars')}
+            >
+              <Bell className="h-4 w-4 md:h-5 md:w-5" />
+              <span className="text-xs">View Circulars</span>
+            </Button>
+            <Button 
+              variant="outline" 
+              className="h-14 md:h-16 flex flex-col space-y-1 justify-center p-2"
+              onClick={() => setActiveTab('contacts')}
+            >
+              <Mail className="h-4 w-4 md:h-5 md:w-5" />
+              <span className="text-xs">Contact Messages</span>
+            </Button>
+            <Button 
+              variant="outline" 
+              className="h-14 md:h-16 flex flex-col space-y-1 justify-center p-2"
+              onClick={() => setActiveTab('other-files')}
+            >
+              <FolderOpen className="h-4 w-4 md:h-5 md:w-5" />
+              <span className="text-xs">Other Files</span>
+            </Button>
+            <Button 
+              variant="outline" 
+              className="h-14 md:h-16 flex flex-col space-y-1 justify-center p-2"
+              onClick={() => {
+                setActiveTab('downloads');
+                setDownloadsSubTab('categories');
+              }}
+            >
+              <Plus className="h-4 w-4 md:h-5 md:w-5" />
+              <span className="text-xs">Create Category</span>
+            </Button>
+            <Button 
+              variant="outline" 
+              className="h-14 md:h-16 flex flex-col space-y-1 justify-center p-2"
+              onClick={() => {
+                setActiveTab('downloads');
+                setDownloadsSubTab('upload');
+              }}
+            >
+              <Upload className="h-4 w-4 md:h-5 md:w-5" />
+              <span className="text-xs">Upload Document</span>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Unread Contact Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2 text-sm md:text-base">
+            <Mail className="h-4 w-4 md:h-5 md:w-5" />
+            <span>Unread Contact Messages</span>
+            {unreadNotifications > 0 && (
+              <span className="bg-red-500 text-white text-xs rounded-full h-4 w-4 md:h-5 md:w-5 flex items-center justify-center">
+                {unreadNotifications}
+              </span>
+            )}
+          </CardTitle>
+          <CardDescription className="text-xs md:text-sm">
+            Recent contact form submissions requiring attention
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3 md:space-y-4">
+            {/* Sample unread contact messages */}
+            <div className="border-l-4 border-red-500 pl-3 md:pl-4 py-3 bg-red-50 rounded-r-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-900">John Doe</p>
+                  <p className="text-xs text-gray-600">john.doe@example.com</p>
+                  <p className="text-sm text-gray-700 mt-1">Inquiry about investment opportunities</p>
+                </div>
+                <div className="text-left sm:text-right">
+                  <p className="text-xs text-gray-500">2 hours ago</p>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="mt-2 w-full sm:w-auto"
+                    onClick={() => setActiveTab('contacts')}
+                  >
+                    View Details
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-l-4 border-red-500 pl-3 md:pl-4 py-3 bg-red-50 rounded-r-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-900">Sarah Wilson</p>
+                  <p className="text-xs text-gray-600">sarah.wilson@email.com</p>
+                  <p className="text-sm text-gray-700 mt-1">Request for financial consultation</p>
+                </div>
+                <div className="text-left sm:text-right">
+                  <p className="text-xs text-gray-500">4 hours ago</p>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="mt-2 w-full sm:w-auto"
+                    onClick={() => setActiveTab('contacts')}
+                  >
+                    View Details
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-l-4 border-red-500 pl-3 md:pl-4 py-3 bg-red-50 rounded-r-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-900">Mike Johnson</p>
+                  <p className="text-xs text-gray-600">mike.j@company.com</p>
+                  <p className="text-sm text-gray-700 mt-1">Question about document requirements</p>
+                </div>
+                <div className="text-left sm:text-right">
+                  <p className="text-xs text-gray-500">1 day ago</p>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="mt-2 w-full sm:w-auto"
+                    onClick={() => setActiveTab('contacts')}
+                  >
+                    View Details
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-center pt-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setActiveTab('contacts')}
+                className="w-full"
+              >
+                View All Contact Messages
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -506,29 +814,29 @@ const Dashboard: React.FC = () => {
   );
 
   const renderDownloads = () => (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Downloads</h1>
-          <p className="text-gray-600">Access all your documents and forms</p>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Downloads</h1>
+          <p className="text-sm md:text-base text-gray-600">Access all your documents and forms</p>
         </div>
         <div className="flex items-center space-x-2">
-          <Button variant="outline" size="sm">
-            <Filter className="h-4 w-4 mr-2" />
-            Filter
+          <Button variant="outline" size="sm" className="text-xs md:text-sm">
+            <Filter className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+            <span className="hidden sm:inline">Filter</span>
           </Button>
-          <Button size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            Download All
+          <Button size="sm" className="text-xs md:text-sm">
+            <Download className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+            <span className="hidden sm:inline">Download All</span>
           </Button>
         </div>
       </div>
 
       {/* Search and Filter */}
       <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4">
+        <CardContent className="p-3 md:p-4">
+          <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
             <div className="flex-1">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -536,7 +844,7 @@ const Dashboard: React.FC = () => {
                   placeholder="Search files..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 text-sm md:text-base"
                 />
               </div>
             </div>
@@ -553,7 +861,7 @@ const Dashboard: React.FC = () => {
                     loadCategoryDocuments(parseInt(e.target.value));
                   }
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm md:text-base"
               >
                 <option value="all">All Categories</option>
                 {categories.map(category => (
@@ -588,23 +896,23 @@ const Dashboard: React.FC = () => {
 
       {/* Categories Grid */}
       {!loadingFiles && !fileError && categories.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {categories.map((category) => {
             // Map icon names to actual icon components
             const getIconComponent = (iconName: string) => {
               switch (iconName) {
                 case 'FileCheck':
-                  return <FileCheck className="h-5 w-5 text-blue-600" />;
+                  return <FileCheck className="h-4 w-4 md:h-5 md:w-5 text-blue-600" />;
                 case 'ClipboardList':
-                  return <ClipboardList className="h-5 w-5 text-green-600" />;
+                  return <ClipboardList className="h-4 w-4 md:h-5 md:w-5 text-green-600" />;
                 case 'Shield':
-                  return <Shield className="h-5 w-5 text-purple-600" />;
+                  return <Shield className="h-4 w-4 md:h-5 md:w-5 text-purple-600" />;
                 case 'FileText':
-                  return <FileText className="h-5 w-5 text-orange-600" />;
+                  return <FileText className="h-4 w-4 md:h-5 md:w-5 text-orange-600" />;
                 case 'Bell':
-                  return <Bell className="h-5 w-5 text-red-600" />;
+                  return <Bell className="h-4 w-4 md:h-5 md:w-5 text-red-600" />;
                 default:
-                  return <FileCheck className="h-5 w-5 text-blue-600" />;
+                  return <FileCheck className="h-4 w-4 md:h-5 md:w-5 text-blue-600" />;
               }
             };
 
@@ -614,19 +922,19 @@ const Dashboard: React.FC = () => {
                 className="hover:shadow-lg transition-shadow cursor-pointer"
                 onClick={() => loadCategoryDocuments(category.id)}
               >
-                <CardHeader>
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <CardHeader className="p-3 md:p-6">
+                  <div className="flex items-center space-x-2 md:space-x-3">
+                    <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                       {getIconComponent(category.icon)}
                     </div>
-                                         <div>
-                       <CardTitle className="text-lg">{category.name}</CardTitle>
-                       <CardDescription>{category.documentCount} files • Sort: {category.sortOrder}</CardDescription>
-                     </div>
+                    <div>
+                      <CardTitle className="text-sm md:text-lg">{category.name}</CardTitle>
+                      <CardDescription className="text-xs md:text-sm">{category.documentCount} files • Sort: {category.sortOrder}</CardDescription>
+                    </div>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-gray-600">{category.description}</p>
+                <CardContent className="p-3 md:p-6 pt-0">
+                  <p className="text-xs md:text-sm text-gray-600">{category.description}</p>
                 </CardContent>
               </Card>
             );
@@ -648,11 +956,11 @@ const Dashboard: React.FC = () => {
       {/* Documents List */}
       {selectedCategory && documents.length > 0 && (
         <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
+          <CardHeader className="p-4 md:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <CardTitle>{selectedCategory.name} Documents ({documents.length})</CardTitle>
-                <CardDescription>
+                <CardTitle className="text-lg md:text-xl">{selectedCategory.name} Documents ({documents.length})</CardTitle>
+                <CardDescription className="text-sm">
                   Browse and download all available files in this category
                 </CardDescription>
               </div>
@@ -663,42 +971,44 @@ const Dashboard: React.FC = () => {
                   setDocuments([]);
                   setSelectedCategoryFilter('all');
                 }}
+                className="self-start sm:self-auto"
               >
                 <ChevronLeft className="h-4 w-4 mr-2" />
                 Back to Categories
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 md:p-6">
             <div className="space-y-3">
               {documents.map((document) => (
-                <div key={document.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <FileText className="h-6 w-6 text-blue-600" />
+                <div key={document.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 md:p-4 bg-gray-50 rounded-lg space-y-3 sm:space-y-0">
+                  <div className="flex items-center space-x-3 md:space-x-4">
+                    <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <FileText className="h-5 w-5 md:h-6 md:w-6 text-blue-600" />
                     </div>
-                    <div>
-                      <p className="font-medium">{document.displayName}</p>
-                      <p className="text-sm text-gray-500">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm md:text-base">{document.displayName}</p>
+                      <p className="text-xs md:text-sm text-gray-500">
                         {document.categoryName} • {document.fileType.toUpperCase()} • 
                         {(document.fileSize / 1024 / 1024).toFixed(2)} MB • 
                         {new Date(document.uploadDate).toLocaleDateString()}
                       </p>
                       {document.description && (
-                        <p className="text-sm text-gray-400 mt-1">{document.description}</p>
+                        <p className="text-xs md:text-sm text-gray-400 mt-1">{document.description}</p>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => handleDocumentDownload(document.id)}
+                      className="w-full sm:w-auto"
                     >
                       <Download className="h-4 w-4 mr-2" />
                       Download
                     </Button>
-                    <div className="text-sm text-gray-500">
+                    <div className="text-xs md:text-sm text-gray-500 text-center sm:text-left">
                       {document.downloadCount} downloads
                     </div>
                   </div>
@@ -921,12 +1231,12 @@ const Dashboard: React.FC = () => {
           default:
             return renderDownloads();
         }
-      case 'files':
-        return renderFiles();
-      case 'analytics':
-        return renderAnalytics();
-      case 'goals':
-        return renderGoals();
+      case 'circulars':
+        return <CircularManagement />;
+      case 'other-files':
+        return renderOtherFiles();
+      case 'contacts':
+        return <ContactManagement />;
       default:
         return renderHome();
     }
@@ -934,45 +1244,15 @@ const Dashboard: React.FC = () => {
 
 
 
-  const renderFiles = () => (
+  const renderOtherFiles = () => (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>File Management</CardTitle>
+          <CardTitle>Other Files Management</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-            <p className="text-gray-500">File management interface will be displayed here</p>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-
-  const renderAnalytics = () => (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Analytics</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-            <p className="text-gray-500">Analytics charts will be displayed here</p>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-
-  const renderGoals = () => (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Financial Goals</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-            <p className="text-gray-500">Goals tracking will be displayed here</p>
+            <p className="text-gray-500">Other files management interface will be displayed here</p>
           </div>
         </CardContent>
       </Card>
@@ -982,10 +1262,19 @@ const Dashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="flex">
-        {/* Single Toggle Sidebar */}
+        {/* Mobile Sidebar Overlay */}
+        {mobileSidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+        )}
+
+        {/* Sidebar */}
         <div className={`
-          fixed inset-y-0 left-0 z-40 bg-white shadow-lg transform transition-all duration-300 ease-in-out
+          fixed inset-y-0 left-0 z-50 bg-white shadow-lg transform transition-all duration-300 ease-in-out
           ${sidebarCollapsed ? 'w-16' : 'w-64'}
+          ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}>
           <div className="flex flex-col h-full">
             {/* Sidebar Header */}
@@ -1100,23 +1389,118 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Main Content */}
-        <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
+        <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}`}>
           {/* Header */}
           <header className="bg-white shadow-sm border-b">
-            <div className="px-6 py-4">
+            <div className="px-4 md:px-6 py-4">
               <div className="flex justify-between items-center">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">
-                    {activeTab === 'downloads' && downloadsSubTab 
-                      ? downloadsSubItems.find(item => item.id === downloadsSubTab)?.label
-                      : sidebarItems.find(item => item.id === activeTab)?.label
-                    }
-                  </h2>
-                  <p className="text-gray-600">
-                    Welcome back, {user?.strName ? getFirstName(user.strName) : 'User'}!
-                  </p>
+                <div className="flex-1">
+                  <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                    {/* Mobile Menu Button */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setMobileSidebarOpen(true)}
+                      className="lg:hidden self-start"
+                    >
+                      <Menu className="h-5 w-5" />
+                    </Button>
+                    
+                    <div>
+                      <h2 className="text-lg md:text-xl lg:text-2xl font-bold text-gray-900">
+                        {activeTab === 'downloads' && downloadsSubTab 
+                          ? downloadsSubItems.find(item => item.id === downloadsSubTab)?.label
+                          : sidebarItems.find(item => item.id === activeTab)?.label
+                        }
+                      </h2>
+                      <p className="text-sm md:text-base text-gray-600">
+                        Welcome back, {user?.strName ? getFirstName(user.strName) : 'User'}!
+                      </p>
+                    </div>
+                    
+                    {/* Global Search */}
+                    {activeTab === 'home' && (
+                      <div className="relative w-full sm:w-auto sm:ml-8">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                        <input
+                          type="text"
+                          placeholder="Search documents, circulars..."
+                          className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-80"
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
                 
+                {/* Notifications */}
+                <div className="relative mr-2 md:mr-4">
+                  <Button
+                    variant="ghost"
+                    onClick={() => setShowNotifications(!showNotifications)}
+                    className="relative flex items-center space-x-2"
+                  >
+                    <Bell className="h-4 w-4 md:h-5 md:w-5 text-gray-600" />
+                    {unreadNotifications > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 md:h-5 md:w-5 flex items-center justify-center">
+                        {unreadNotifications}
+                      </span>
+                    )}
+                  </Button>
+                  
+                  {showNotifications && (
+                    <div className="absolute right-0 mt-2 w-72 md:w-80 bg-white rounded-lg shadow-lg border z-50 max-h-96 overflow-y-auto">
+                      <div className="p-3 md:p-4 border-b">
+                        <h3 className="font-medium text-gray-900 text-sm md:text-base">Notifications</h3>
+                        <p className="text-xs md:text-sm text-gray-500">{notifications.length} total</p>
+                      </div>
+                      <div className="p-2">
+                        {notifications.length === 0 ? (
+                          <div className="text-center py-6 md:py-8">
+                            <Bell className="h-6 w-6 md:h-8 md:w-8 text-gray-400 mx-auto mb-2" />
+                            <p className="text-xs md:text-sm text-gray-500">No notifications</p>
+                          </div>
+                        ) : (
+                          notifications.map((notification) => {
+                            const Icon = getNotificationIcon(notification.type);
+                            return (
+                              <div
+                                key={notification.id}
+                                className={`p-2 md:p-3 rounded-lg mb-2 cursor-pointer hover:bg-gray-50 ${getNotificationColor(notification.type)}`}
+                                onClick={() => {
+                                  setShowNotifications(false);
+                                  // Handle notification click
+                                }}
+                              >
+                                <div className="flex items-start space-x-2 md:space-x-3">
+                                  <Icon className="h-3 w-3 md:h-4 md:w-4 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs md:text-sm font-medium text-gray-900">{notification.message}</p>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      {formatNotificationTime(notification.timestamp)}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                      <div className="p-2 border-t">
+                        <Button
+                          variant="ghost"
+                          className="w-full text-xs md:text-sm"
+                          onClick={() => {
+                            setUnreadNotifications(0);
+                            setShowNotifications(false);
+                          }}
+                        >
+                          Mark all as read
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Profile Dropdown */}
                 <div className="relative">
                   <Button
@@ -1124,25 +1508,25 @@ const Dashboard: React.FC = () => {
                     onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
                     className="flex items-center space-x-2"
                   >
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                      <User className="h-4 w-4 text-blue-600" />
+                    <div className="w-6 h-6 md:w-8 md:h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <User className="h-3 w-3 md:h-4 md:w-4 text-blue-600" />
                     </div>
-                    <span className="text-sm font-medium">
+                    <span className="text-xs md:text-sm font-medium hidden sm:block">
                       {user?.strName ? getFirstName(user.strName) : 'User'}
                     </span>
-                    <ChevronDown className="h-4 w-4" />
+                    <ChevronDown className="h-3 w-3 md:h-4 md:w-4 hidden sm:block" />
                   </Button>
                   
                   {profileDropdownOpen && (
-                    <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border z-50">
-                      <div className="p-4 border-b">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                            <User className="h-6 w-6 text-blue-600" />
+                    <div className="absolute right-0 mt-2 w-56 md:w-64 bg-white rounded-lg shadow-lg border z-50">
+                      <div className="p-3 md:p-4 border-b">
+                        <div className="flex items-center space-x-2 md:space-x-3">
+                          <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                            <User className="h-5 w-5 md:h-6 md:w-6 text-blue-600" />
                           </div>
                           <div>
-                            <p className="font-medium">{user?.strName || 'User'}</p>
-                            <p className="text-sm text-gray-500">{user?.strEmailId}</p>
+                            <p className="font-medium text-sm md:text-base">{user?.strName || 'User'}</p>
+                            <p className="text-xs md:text-sm text-gray-500">{user?.strEmailId}</p>
                           </div>
                         </div>
                       </div>
@@ -1153,9 +1537,9 @@ const Dashboard: React.FC = () => {
                             setProfileDropdownOpen(false);
                             handleProfileModalOpen();
                           }}
-                          className="w-full justify-start"
+                          className="w-full justify-start text-xs md:text-sm"
                         >
-                          <User className="h-4 w-4 mr-2" />
+                          <User className="h-3 w-3 md:h-4 md:w-4 mr-2" />
                           View Profile
                         </Button>
                         <Button
@@ -1164,9 +1548,9 @@ const Dashboard: React.FC = () => {
                             setProfileDropdownOpen(false);
                             setActiveTab('settings');
                           }}
-                          className="w-full justify-start"
+                          className="w-full justify-start text-xs md:text-sm"
                         >
-                          <Settings className="h-4 w-4 mr-2" />
+                          <Settings className="h-3 w-3 md:h-4 md:w-4 mr-2" />
                           Settings
                         </Button>
                         <Button
@@ -1175,9 +1559,9 @@ const Dashboard: React.FC = () => {
                             setProfileDropdownOpen(false);
                             handleLogout();
                           }}
-                          className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
+                          className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 text-xs md:text-sm"
                         >
-                          <LogOut className="h-4 w-4 mr-2" />
+                          <LogOut className="h-3 w-3 md:h-4 md:w-4 mr-2" />
                           Logout
                         </Button>
                       </div>
@@ -1189,7 +1573,7 @@ const Dashboard: React.FC = () => {
           </header>
 
           {/* Page Content */}
-          <main className="flex-1 p-6">
+          <main className="flex-1 p-4 md:p-6">
             {renderContent()}
           </main>
         </div>
@@ -1199,10 +1583,13 @@ const Dashboard: React.FC = () => {
       {showProfileModal && renderProfileModal()}
 
       {/* Click outside to close dropdowns */}
-      {profileDropdownOpen && (
+      {(profileDropdownOpen || showNotifications) && (
         <div 
           className="fixed inset-0 z-40"
-          onClick={() => setProfileDropdownOpen(false)}
+          onClick={() => {
+            setProfileDropdownOpen(false);
+            setShowNotifications(false);
+          }}
         />
       )}
     </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import StockTicker from '../components/StockTicker';
-import { ChevronDown, ChevronRight, Download, FileText, AlertCircle } from 'lucide-react';
+import { ChevronDown, ChevronRight, Download, FileText, AlertCircle, Eye, Calendar } from 'lucide-react';
 import { apiService, FileCategory, FileDocument, CategoryWithDocuments } from '../services/api';
 
 const Downloads: React.FC = () => {
@@ -78,6 +78,29 @@ const Downloads: React.FC = () => {
     }
   };
 
+  const handleShow = async (fileDocument: FileDocument) => {
+    try {
+      const showUrl = await apiService.showDocument(fileDocument.id);
+      window.open(showUrl, '_blank');
+    } catch (err) {
+      console.error('Show failed:', err);
+      alert('Failed to open document. Please try again.');
+    }
+  };
+
+  const formatUploadDate = (dateString: string): string => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-IN', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch (error) {
+      return 'Unknown date';
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white">
       <Header currentPage="downloads" />
@@ -147,6 +170,7 @@ const Downloads: React.FC = () => {
                 {/* Left Side - Main Buttons */}
                 <div className="lg:w-1/3">
                   <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 sm:mb-6">Download Categories</h3>
+                  <p className="text-sm text-gray-600 mb-4">Scroll to see all categories</p>
                   
                   {loading ? (
                     <div className="space-y-3 sm:space-y-4">
@@ -155,7 +179,7 @@ const Downloads: React.FC = () => {
                       ))}
                     </div>
                   ) : (
-                    <div className="space-y-3 sm:space-y-4">
+                    <div className="max-h-64 sm:max-h-80 lg:max-h-96 overflow-y-auto pr-2 space-y-3 sm:space-y-4 custom-scrollbar">
                       {categories.map((category) => (
                         <button
                           key={category.id}
@@ -188,6 +212,9 @@ const Downloads: React.FC = () => {
                     <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
                       {selectedCategory ? selectedCategory.name : 'Select a category to view documents'}
                     </h3>
+                    {selectedCategory && (
+                      <p className="text-sm text-gray-600 mb-4">Scroll to see all documents</p>
+                    )}
                     
                     {selectedCategory && (
                       <div>
@@ -199,7 +226,7 @@ const Downloads: React.FC = () => {
                             <p>No documents available in this category.</p>
                           </div>
                         ) : (
-                          <div className="space-y-3">
+                          <div className="max-h-64 sm:max-h-80 lg:max-h-96 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
                             {selectedCategory.documents
                               .filter(doc => doc.isActive)
                               .map((fileDocument) => (
@@ -210,32 +237,45 @@ const Downloads: React.FC = () => {
                                       <span className="font-medium text-gray-900">{fileDocument.displayName}</span>
                                     </div>
                                     <div className="text-sm text-gray-500 space-y-1">
-                                      <div className="flex items-center space-x-4">
+                                      <div className="flex items-center space-x-4 mb-2">
                                         <span>Size: {apiService.formatFileSize(fileDocument.fileSize)}</span>
                                         <span>Type: {fileDocument.fileType.toUpperCase()}</span>
                                         {fileDocument.downloadCount > 0 && (
                                           <span>Downloads: {fileDocument.downloadCount}</span>
                                         )}
                                       </div>
+                                      <div className="flex items-center text-gray-400">
+                                        <Calendar className="w-3 h-3 mr-1" />
+                                        <span>Uploaded: {formatUploadDate(fileDocument.uploadDate)}</span>
+                                      </div>
                                     </div>
                                   </div>
-                                  <button 
-                                    onClick={() => handleDownload(fileDocument)}
-                                    disabled={downloading === fileDocument.id}
-                                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg transition-colors duration-200 flex items-center space-x-2 self-start sm:self-auto"
-                                  >
-                                    {downloading === fileDocument.id ? (
-                                      <>
-                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                        <span>Downloading...</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Download className="w-4 h-4" />
-                                        <span>Download</span>
-                                      </>
-                                    )}
-                                  </button>
+                                  <div className="flex space-x-2 self-start sm:self-auto">
+                                    <button 
+                                      onClick={() => handleShow(fileDocument)}
+                                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg transition-colors duration-200 flex items-center space-x-2"
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                      <span>Show</span>
+                                    </button>
+                                    <button 
+                                      onClick={() => handleDownload(fileDocument)}
+                                      disabled={downloading === fileDocument.id}
+                                      className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-3 py-2 rounded-lg transition-colors duration-200 flex items-center space-x-2"
+                                    >
+                                      {downloading === fileDocument.id ? (
+                                        <>
+                                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                          <span>Downloading...</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Download className="w-4 h-4" />
+                                          <span>Download</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
                                 </div>
                               ))}
                           </div>

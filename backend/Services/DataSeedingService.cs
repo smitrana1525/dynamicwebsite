@@ -27,7 +27,10 @@ namespace MoneyCareBackend.Services
                 // Check if data already exists
                 if (await _context.FileCategories.AnyAsync())
                 {
-                    Console.WriteLine("Sample data already exists. Skipping seeding.");
+                    Console.WriteLine("Sample data already exists. Checking for Important Circulars category...");
+                    
+                    // Ensure Important Circulars category exists
+                    await EnsureImportantCircularsCategoryExistsAsync();
                     return;
                 }
 
@@ -65,6 +68,17 @@ namespace MoneyCareBackend.Services
                         Icon = "Shield",
                         IsActive = true,
                         SortOrder = 3,
+                        CreatedDate = DateTime.UtcNow,
+                        ModifiedDate = DateTime.UtcNow,
+                        CreatedBy = defaultUserGuid,
+                        ModifiedBy = defaultUserGuid
+                    },
+                    new FileCategory
+                    {
+                        Name = "Important Circulars",
+                        Icon = "Bell",
+                        IsActive = true,
+                        SortOrder = 4,
                         CreatedDate = DateTime.UtcNow,
                         ModifiedDate = DateTime.UtcNow,
                         CreatedBy = defaultUserGuid,
@@ -175,6 +189,41 @@ namespace MoneyCareBackend.Services
             await _context.SaveChangesAsync();
 
             return defaultUser.strGUID;
+        }
+
+        private async Task EnsureImportantCircularsCategoryExistsAsync()
+        {
+            // Check if Important Circulars category exists
+            var circularsCategory = await _context.FileCategories
+                .FirstOrDefaultAsync(c => c.Name == "Important Circulars");
+
+            if (circularsCategory == null)
+            {
+                // Get or create a default user
+                var defaultUserGuid = await GetOrCreateDefaultUserAsync();
+
+                // Create the Important Circulars category
+                var newCategory = new FileCategory
+                {
+                    Name = "Important Circulars",
+                    Icon = "Bell",
+                    IsActive = true,
+                    SortOrder = 4,
+                    CreatedDate = DateTime.UtcNow,
+                    ModifiedDate = DateTime.UtcNow,
+                    CreatedBy = defaultUserGuid,
+                    ModifiedBy = defaultUserGuid
+                };
+
+                _context.FileCategories.Add(newCategory);
+                await _context.SaveChangesAsync();
+
+                Console.WriteLine("Important Circulars category created successfully.");
+            }
+            else
+            {
+                Console.WriteLine("Important Circulars category already exists.");
+            }
         }
     }
 } 

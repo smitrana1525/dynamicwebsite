@@ -82,6 +82,11 @@ class ApiService {
     return this.makeRequest<FileDocument[]>('/PublicFile/documents');
   }
 
+  // Show document (view in browser)
+  async showDocument(documentId: number): Promise<string> {
+    return `${API_BASE_URL}/PublicFile/documents/${documentId}/show`;
+  }
+
   // Download document
   async downloadDocument(documentId: number): Promise<Blob> {
     try {
